@@ -21,7 +21,7 @@ import logging
 import win32com.client
 import re
 import time
-print 'SVOS 1.17'
+print('SVOS 1.17')
 
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
@@ -57,19 +57,19 @@ def getEIPpath():
         hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
         result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
         return result[0]
-    except OSError, e:
+    except OSError(e):
         exists = False
 
     try:
         hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-    except OSError, e:
-        print 'Not a Triton Management Server'
+    except OSError(e):
+        print('Not a Triton Management Server')
 
 
 EIP = getEIPpath()
 TMP = os.getenv('TMP', 'NONE')
 dsshome = os.getenv('DSS_HOME', 'NONE')
-print 'AP-DATA Detected.  Proceeding with data collection.'
+print('AP-DATA Detected.  Proceeding with data collection.')
 if dsshome == 'NONE':
     servicemanager.LogInfoMsg('No AP-DATA Manager Detected.  Stopping')
     sys.exit()
@@ -173,113 +173,113 @@ class Logger(object):
 
 sys.stdout = Logger(FULL_PATH)
 shutil.copytree(LOGS, DSS)
-print 'Copying DSS home'
+print('Copying DSS home')
 shutil.copy(RRDB, RR)
-print 'Copying Resource Resolver'
+print('Copying Resource Resolver')
 if os.path.isfile(DLPXML):
     shutil.copy(DLPXML, DLPCONF)
-    print 'Copying DLP.xml'
+    print('Copying DLP.xml')
 else:
-    print 'Not a Triton Manager, No dlp.xml, moving on.'
+    print('Not a Triton Manager, No dlp.xml, moving on.')
 if os.path.isdir(TOM):
     shutil.copy(CATPROP, CATALINAPROPERTIES)
-    print 'Copying catalina.properties'
+    print('Copying catalina.properties')
 else:
-    print 'Not a Triton Manager, No catalina.properties, moving on.'
+    print('Not a Triton Manager, No catalina.properties, moving on.')
 if os.path.isfile(EIPSET):
     shutil.copy(EIPSET, EIPXML)
-    print 'Copying EIP Settings'
+    print('Copying EIP Settings')
 else:
-    print 'Not a Triton Manager, No EIPSettings, moving on.'
+    print('Not a Triton Manager, No EIPSettings, moving on.')
 if os.path.isdir(BATCHSERV):
     shutil.copytree(BATCHSERV, DBATCHLOG)
-    print 'Copying Batch server logs'
+    print('Copying Batch server logs')
 else:
-    print 'Not a Triton Manager, or a legacy manager. No Batch Server, moving on.'
+    print('Not a Triton Manager, or a legacy manager. No Batch Server, moving on.')
 shutil.copy(HTTPC, HTTPconf)
-print 'Copying http config'
+print('Copying http config')
 shutil.copy(HTTPSSLC, HTTPSconf)
-print 'Copying https config'
+print('Copying https config')
 shutil.copy(EP_CLUSTER_KEY, EPCKEY)
-print 'Coying EP_Cluster.key'
+print('Coying EP_Cluster.key')
 shutil.copy(Machine_KEY, MAC_KEY)
-print 'Copying machine.key'
+print('Copying machine.key')
 shutil.copy(APPLOG, APPLICATION)
-print 'Copying Windows Application Event Logs'
+print('Copying Windows Application Event Logs')
 shutil.copy(SYSLOG, SYSTEM)
-print 'Copying Windows System Event Logs'
+print('Copying Windows System Event Logs')
 shutil.copytree(CONFSTORE, CONFIGSTORE)
-print 'Copying ConfigurationStore'
-print 'Copying canonizer config'
+print('Copying ConfigurationStore')
+print('Copying canonizer config')
 shutil.copy(CANON, CANONconf)
-print 'Copying extractor config'
+print('Copying extractor config')
 shutil.copy(EXTRACTconf, EXTconf)
-print 'Copying extractorlinux config'
+print('Copying extractorlinux config')
 shutil.copy(EXTRACTLINconf, EXTLINconf)
 if os.path.isdir(TOM):
     shutil.copytree(TOM, TOMCAT)
-    print 'Copying Tomcat logs'
+    print('Copying Tomcat logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 shutil.copy(EPSERVERCONF, EPSERVERCONFIG)
-print 'Copying EndPointServer Configuration'
+print('Copying EndPointServer Configuration')
 if os.path.isfile(EIPSET):
     shutil.copytree(EIPTOMLOGS, EIPTOMLOGDIR)
-    print 'Copying EIP Tomcat logs'
+    print('Copying EIP Tomcat logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isfile(EIPSET):
     shutil.copytree(EIPLOGS, EIPLOGDIR)
-    print 'Copying EIP Install logs'
+    print('Copying EIP Install logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isdir(EIPapachelogs):
     shutil.copytree(EIPapachelogs, EIPAPACHELOGS)
-    print 'Copying EIP Apache logs'
+    print('Copying EIP Apache logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isfile(FileEncryptor):
     shutil.copy(FileEncryptor, FE)
-    print 'Copying File Encryptor log'
+    print('Copying File Encryptor log')
 else:
-    print 'Not a Triton Manager, or a legacy manager. No file encryptor log, moving on.'
-print 'Copying DSS apache logs'
+    print('Not a Triton Manager, or a legacy manager. No file encryptor log, moving on.')
+print('Copying DSS apache logs')
 shutil.copytree(APACHELOGS, DSSAPACHELOGS)
 if os.path.isdir(DBATCHSERV):
     shutil.copytree(DBATCHSERV, DBATCHLOG801)
-    print 'Copying Batch server logs'
+    print('Copying Batch server logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isdir(SERLOG):
     shutil.copytree(SERLOG, SERVLOG)
-    print 'Copying Message Broker Service logs'
+    print('Copying Message Broker Service logs')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isfile(MBAU):
     shutil.copy(MBAU, MBAUD)
-    print 'Copying Message Broker Audit log'
+    print('Copying Message Broker Audit log')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isfile(MBMQ):
     shutil.copy(MBMQ, ACMQ)
-    print 'Copying Message Broker activemq log'
+    print('Copying Message Broker activemq log')
 else:
-    print 'Not a Triton Manager, No Tomcat logs, moving on.'
+    print('Not a Triton Manager, No Tomcat logs, moving on.')
 if os.path.isfile(OCR):
     shutil.copy(OCR, OCRConfig)
-    print 'Copying OCR server config'
+    print('Copying OCR server config')
 else:
-    print 'Not a secondary server. No OCR config file, moving on'
+    print('Not a secondary server. No OCR config file, moving on')
 shutil.copy(PEP, PEPS)
-print 'Copying policyenginge.policy.xml'
+print('Copying policyenginge.policy.xml')
 shutil.copy(PEPB, PEPBS)
-print 'Copying policyenginge.policy.xml.bak'
+print('Copying policyenginge.policy.xml.bak')
 shutil.copy(AC, ACS)
-print 'Copying allcerts.cer'
+print('Copying allcerts.cer')
 shutil.copy(CA, CAS)
-print 'Copying ca.cer'
+print('Copying ca.cer')
 shutil.copy(HCK, HCKS)
-print 'Copying HostCert.key'
+print('Copying HostCert.key')
 
 '''
 Parse EIPSettings.xml for the following elements within the <LogDB></LogDB> tags:
@@ -314,9 +314,9 @@ if os.path.exists(EIPSET):
     if len(SQLDOMAIN) >= 1:
         SQLUSERNAME = SQLDOMAIN + '\\' + SQLUSER
     elif SQLDOMAIN == '' or SQLDOMAIN == 'None':
-        print 'SQL authentication will be used'
+        print('SQL authentication will be used')
     else:
-        print 'Not a Triton Management Server, moving on'
+        print('Not a Triton Management Server, moving on')
 if os.path.exists(EIPSET):
     # SQLPW = SQLPASS.split(':')
     # SQLPWD = SQLPW[2] + ' ' + SQLPW[0] + ' ' + SQLPW[1]
@@ -326,7 +326,7 @@ if os.path.exists(EIPSET):
     # FINAL = CONVERTPW.strip('\n')
     pass
 else:
-    print 'Not a Triton Management Server, moving on'
+    print('Not a Triton Management Server, moving on')
 enable_file_system_redirection().__enter__()
 if os.path.exists(EIPSET) and SQLUSERNAME.find('None') >= 0:
     # conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (SQLSERVER, SQLUSER, FINAL))
@@ -664,8 +664,8 @@ else:
         # handel.close()
         pass
     else:
-        print 'Not a Triton Manager, or a legacy manager, moving on'
-    print 'Gathering OS info.  This may take a few minutes.  Please be patient.'
+        print('Not a Triton Manager, or a legacy manager, moving on')
+    print('Gathering OS info.  This may take a few minutes.  Please be patient.')
     msinfo = '%s\\System32\\msinfo32' % SYSROOT
     msinfoout = '%s\\SVOS\\SVOS.txt' % TMP
     subprocess.call([msinfo, '/report', msinfoout])
@@ -673,10 +673,10 @@ else:
         with open(CONF + filename) as currentfile:
             text = currentfile.read()
             if 'DEBUG' in text or 'debug' in text:
-                print filename + ' ' + ' in debug mode'
+                print(filename + ' ' + ' in debug mode')
 
     if os.path.isfile(CATPROP):
-        print 'The following are the cluster keys from Catalina.Properties, ca.cer, ep_cluster.key, and jetty.xml in that order'
+        print('The following are the cluster keys from Catalina.Properties, ca.cer, ep_cluster.key, and jetty.xml in that order')
 
         def catprop():
             searchfile = open(CATPROP, 'r')
@@ -693,8 +693,8 @@ else:
         os.chdir(dsshome)
         cmd2 = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + cat3
         CONVERTPW2 = os.popen(cmd2).read()
-        print 'catalina properties'
-        print CONVERTPW2
+        print('catalina properties')
+        print(CONVERTPW2)
 
         def ca():
             search = open(CACER, 'r')
@@ -706,15 +706,15 @@ else:
         cacert = ca()
         ctool = 'cryptotool -k 4 -d -t' + ' ' + cacert
         CONVERT3 = os.popen(ctool).read()
-        print 'ca.cer'
-        print CONVERT3
+        print('ca.cer')
+        print(CONVERT3)
         os.chdir(KEYS)
         ctool2 = 'cryptotool -k 2 -g'
         CONVERT4 = os.popen(ctool2).read()
-        print 'epcluster.key'
-        print CONVERT4
+        print('epcluster.key')
+        print(CONVERT4)
     else:
-        print 'Not a Triton Management Server, moving on'
+        print('Not a Triton Management Server, moving on')
     if os.path.isfile(JETTYXML):
 
         def jettyprop():
@@ -733,10 +733,10 @@ else:
         os.chdir(dsshome)
         jettycmd = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + j5
         CONVERTPW3 = os.popen(jettycmd).read()
-        print 'jetty.xml'
-        print CONVERTPW3
+        print('jetty.xml')
+        print(CONVERTPW3)
     else:
-        print 'Not a Triton manager or version is below 8.1'
+        print('Not a Triton manager or version is below 8.1')
     DIR = '%s\\SVOS' % TMP
     File = 'DEP.txt'
     FULL_PATH = os.path.join(DIR, File)
@@ -759,7 +759,7 @@ else:
             MANAGERS = str(InstalledComponents.find('Managers').text)
 
     else:
-        print 'Not a Triton Management Server, or a legacy manager. Moving on'
+        print('Not a Triton Management Server, or a legacy manager. Moving on')
     jettyhome = os.getenv('JETTY_HOME', 'NONE')
     pythonpath = os.getenv('PYTHONPATH', 'NONE')
     activemqhome = os.getenv('ACTIVEMQ_HOME', 'NONE')
@@ -824,11 +824,11 @@ else:
     time.sleep(5)
     for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP, 'r'):
         if 'TotalPhysicalMemory' in line:
-            print line
+            print(line)
 
     for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP, 'r'):
         if 'TotalPhysicalMemory' in line:
-            print re.findall('\\d+', line)
+            print(re.findall('\\d+', line))
 
     DIR = '%s\\SVOS' % TMP
     File = 'RunningAntiVirus.txt'
@@ -850,7 +850,7 @@ else:
     gpresult = '%s\\System32\\gpresult' % SYSROOT
     SYSINFO = subprocess.call([gpresult, '/r'], stdout=f)
     f.close
-    print 'Thank you for running SVOS.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.'
+    print('Thank you for running SVOS.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.')
 
     def getDSversion():
         areg = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
@@ -859,8 +859,8 @@ else:
         return result[0]
 
 
-    print 'AP-DATA verion'
-    print getDSversion()
+    print('AP-DATA verion')
+    print(getDSversion())
 
     def getrepolocation():
         areg = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
@@ -869,8 +869,8 @@ else:
         return result[0]
 
 
-    print 'Forensics Repository location'
-    print getrepolocation()
+    print('Forensics Repository location')
+    print(getrepolocation())
 
     def main():
         zipper('%s\\SVOS' % TMP, '%s\\FP.zip' % TMP)
