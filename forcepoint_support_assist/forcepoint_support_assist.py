@@ -10,18 +10,19 @@ import pyodbc
 import csv
 import win32wnet
 import servicemanager
-import _winreg
 import ctypes
 import zipfile
 import win32security
 import win32con
-from _winreg import *
 import xml.etree.ElementTree as ET
 import logging
 import win32com.client
 import re
 import time
-print('SVOS 1.17')
+import platform
+
+
+print('Forcepoint Support Assist v0.1.0')
 
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
@@ -53,18 +54,100 @@ class enable_file_system_redirection:
 
 def getEIPpath():
     exists = True
+    # Fixes: Issue #1
     try:
-        hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-        result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
-        return result[0]
-    except OSError(e):
-        exists = False
-
+        py_version = platform.python_version()
+        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
+    except NotImplementedError(e):
+        print('Unknown version of Python')
     try:
-        hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-    except OSError(e):
+        if major == 3:
+            import winreg
+            #from winreg import *
+            try:
+                hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+                result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
+                return result[0]
+            except OSError(e):
+                exists = False
+            try:
+                hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+            except OSError(e):
+                print('Not a Triton Management Server')
+        elif major == 2:
+            import _winreg
+            #from _winreg import *
+            try:
+                hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+                result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
+                return result[0]
+            except OSError(e):
+                exists = False
+            try:
+                hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+            except OSError(e):
+                print('Not a Triton Management Server')
+    except NotImplementedError(e):
         print('Not a Triton Management Server')
 
+def getDSversion():
+    try:
+        py_version = platform.python_version()
+        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
+    except NotImplementedError(e):
+        print('Unknown version of Python')
+    try:
+        if major == 3:
+            import winreg
+            #from winreg import *
+            try:
+                areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+                akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
+                result = winreg.QueryValueEx(akey, 'DisplayVersion')
+                return result[0]
+            except NotImplementedError(e):
+                print('Not a AP-DATA Server')
+        elif major == 2:
+            import _winreg
+            try:
+                areg = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
+                akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
+                result = _winreg.QueryValueEx(akey, 'DisplayVersion')
+                return result[0]
+            except NotImplementedError(e):
+                print('Not a AP-DATA Server')
+    except NotImplementedError(e):
+        print('Not a AP-DATA Server')
+
+def getrepolocation():
+    try:
+        py_version = platform.python_version()
+        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
+    except NotImplementedError(e):
+        print('Unknown version of Python')
+    try:
+        if major == 3:
+            import winreg
+            #from winreg import *
+            try:
+                areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+                akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
+                result = winreg.QueryValueEx(akey, 'RepositoryDir')
+                return result[0]
+            except NotImplementedError(e):
+                print('Not a AP-DATA Server')
+        elif major == 2:
+            import _winreg
+            try:
+                areg = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
+                akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
+                result = _winreg.QueryValueEx(akey, 'RepositoryDir')
+                return result[0]
+            except NotImplementedError(e):
+                print('Not a AP-DATA Server')
+    except NotImplementedError(e):
+        print('Not a AP-DATA Server')
+    
 
 EIP = getEIPpath()
 TMP = os.getenv('TMP', 'NONE')
@@ -852,22 +935,8 @@ else:
     f.close
     print('Thank you for running SVOS.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.')
 
-    def getDSversion():
-        areg = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-        akey = OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
-        result = QueryValueEx(akey, 'DisplayVersion')
-        return result[0]
-
-
     print('AP-DATA verion')
     print(getDSversion())
-
-    def getrepolocation():
-        areg = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-        akey = OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
-        result = QueryValueEx(akey, 'RepositoryDir')
-        return result[0]
-
 
     print('Forensics Repository location')
     print(getrepolocation())
