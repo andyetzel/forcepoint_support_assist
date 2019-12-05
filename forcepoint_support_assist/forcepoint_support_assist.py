@@ -58,7 +58,7 @@ def getEIPpath():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Unknown version of Python')
     try:
         if major == 3:
@@ -68,11 +68,11 @@ def getEIPpath():
                 hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
                 result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
                 return result[0]
-            except OSError(e):
+            except OSError:
                 exists = False
             try:
                 hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-            except OSError(e):
+            except OSError:
                 print('Not a Triton Management Server')
         elif major == 2:
             import _winreg
@@ -81,20 +81,20 @@ def getEIPpath():
                 hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
                 result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
                 return result[0]
-            except OSError(e):
+            except OSError:
                 exists = False
             try:
                 hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-            except OSError(e):
+            except OSError:
                 print('Not a Triton Management Server')
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Not a Triton Management Server')
 
 def getDSversion():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Unknown version of Python')
     try:
         if major == 3:
@@ -105,7 +105,7 @@ def getDSversion():
                 akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
                 result = winreg.QueryValueEx(akey, 'DisplayVersion')
                 return result[0]
-            except NotImplementedError(e):
+            except NotImplementedError:
                 print('Not a AP-DATA Server')
         elif major == 2:
             import _winreg
@@ -114,16 +114,16 @@ def getDSversion():
                 akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
                 result = _winreg.QueryValueEx(akey, 'DisplayVersion')
                 return result[0]
-            except NotImplementedError(e):
+            except NotImplementedError:
                 print('Not a AP-DATA Server')
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Not a AP-DATA Server')
 
 def getrepolocation():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Unknown version of Python')
     try:
         if major == 3:
@@ -134,7 +134,7 @@ def getrepolocation():
                 akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
                 result = winreg.QueryValueEx(akey, 'RepositoryDir')
                 return result[0]
-            except NotImplementedError(e):
+            except NotImplementedError:
                 print('Not a AP-DATA Server')
         elif major == 2:
             import _winreg
@@ -143,9 +143,9 @@ def getrepolocation():
                 akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
                 result = _winreg.QueryValueEx(akey, 'RepositoryDir')
                 return result[0]
-            except NotImplementedError(e):
+            except NotImplementedError:
                 print('Not a AP-DATA Server')
-    except NotImplementedError(e):
+    except NotImplementedError:
         print('Not a AP-DATA Server')
     
 
