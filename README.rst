@@ -14,9 +14,9 @@ Forcepoint Support Assist is a python script used to automate data collection of
 Features
 --------
 
-* Collects DLP logs from all Windows-based servers
-** Forcepoint Security Manager
-** Secondary DLP Servers
+* Collects DLP logs from all Windows-based servers:
+    - Forcepoint Security Manager
+    - Secondary DLP Servers
 
 Releases
 --------
