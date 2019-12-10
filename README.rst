@@ -9,12 +9,27 @@ Forcepoint Support Assist
 
 Forcepoint Support Assist is a python script used to automate data collection of logs for Forcepoint DLP.
 
+This script is based on the original SerVerinfoOS (SVOS) script hosted on the Forcepoint TEG Wiki_
+
+.. _Wiki: http://ssdengwiki1.websense.com/doku.php?id=wiki:tools&s[]=svos#svos_serverinfoos
+
 
 
 Features
 --------
+* Currently supported only on Windows-based servers:
+    - Forcepoint Security Manager
+    - Secondary DLP Servers
+* Compatible with Python 2.x and Python 3.x environments
 
-* TODO
+Releases
+--------
+
+* v0.1.0
+    Initial release
+
+* v0.1.1
+    Hotfix - Fixed an issue causing script to exit prematurely due to permission issue with DSS apache logs
 
 Credits
 -------
