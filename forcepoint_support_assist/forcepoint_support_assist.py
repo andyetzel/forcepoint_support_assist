@@ -22,7 +22,7 @@ import time
 import platform
 
 
-print('Forcepoint Support Assist v0.1.0')
+print('Forcepoint Support Assist v0.1.1')
 
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
@@ -54,7 +54,6 @@ class enable_file_system_redirection:
 
 def getEIPpath():
     exists = True
-    # Fixes: Issue #1
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
@@ -218,7 +217,7 @@ EIPLOGDIR = '%s\\SVOS\\EIPLOGS\\' % TMP
 JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTYHOME
 EIPapachelogs = '%s\\apache\\logs\\' % EIP
 EIPAPACHELOGS = '%s\\SVOS\\EIPapachelogs\\' % TMP
-APACHELOGS = '%sapache\\logs' % dsshome
+APACHELOGS = '%sapache\\logs\\' % dsshome
 DSSAPACHELOGS = '%s\\SVOS\\DSSapachelogs\\' % TMP
 DBATCHSERV = '%s\\logs\\' % JETTYHOME
 DBATCHLOG801 = '%s\\SVOS\\BatchServerlog801\\' % TMP
@@ -326,8 +325,33 @@ if os.path.isfile(FileEncryptor):
     print('Copying File Encryptor log')
 else:
     print('Not a Triton Manager, or a legacy manager. No file encryptor log, moving on.')
+
+#Fixes issue #4
 print('Copying DSS apache logs')
-shutil.copytree(APACHELOGS, DSSAPACHELOGS)
+try:
+    src = APACHELOGS
+    dst = DSSAPACHELOGS
+    if os.path.exists(dst):
+        shutil.rmtree(dst)
+        os.mkdir(dst)
+    else:
+        os.mkdir(dst)
+    if os.path.isdir(src):
+        for filename in os.listdir(src):
+            try:
+                source_file = src + filename
+                shutil.copy2(source_file, dst)
+            except IOError:
+                print('WARN: Unable to copy file ' + source_file + '! Skipping...')
+    if os.path.isfile(src):
+        try:
+            source_file = src
+            shutil.copy2(source_file, dst)
+        except IOError:
+            print('WARN: Unable to copy file ' + source_file + '! Skipping...')
+except IOError:
+    raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
+
 if os.path.isdir(DBATCHSERV):
     shutil.copytree(DBATCHSERV, DBATCHLOG801)
     print('Copying Batch server logs')
