@@ -326,7 +326,6 @@ if os.path.isfile(FileEncryptor):
 else:
     print('Not a Triton Manager, or a legacy manager. No file encryptor log, moving on.')
 
-#Fixes issue #4
 print('Copying DSS apache logs')
 try:
     src = APACHELOGS
