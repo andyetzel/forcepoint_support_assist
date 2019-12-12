@@ -59,9 +59,6 @@ def getEIPpath():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError:
-        print('Unknown version of Python')
-    try:
         if major == 3:
             import winreg
             #from winreg import *
@@ -89,7 +86,7 @@ def getEIPpath():
             except OSError:
                 print('Not a Triton Management Server')
     except NotImplementedError:
-        print('Not a Triton Management Server')
+        print('Unknown version of Python')
 
 def getDSversion():
     try:
@@ -120,13 +117,10 @@ def getDSversion():
     except NotImplementedError:
         print('Not a AP-DATA Server')
 
-def getrepolocation():
+def fingerprint_repository_location():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError:
-        print('Unknown version of Python')
-    try:
         if major == 3:
             import winreg
             #from winreg import *
@@ -147,8 +141,7 @@ def getrepolocation():
             except NotImplementedError:
                 print('Not a AP-DATA Server')
     except NotImplementedError:
-        print('Not a AP-DATA Server')
-    
+        print('Unknown version of Python')
 
 EIP = getEIPpath()
 TMP = os.getenv('TMP', 'NONE')
@@ -158,6 +151,13 @@ if dsshome == 'NONE':
     servicemanager.LogInfoMsg('No AP-DATA Manager Detected.  Stopping')
     sys.exit()
 path = '%s\\SVOS' % TMP
+
+print('AP-DATA verion')
+print(getDSversion())
+
+print('Fingerprint Repository location')
+print(fingerprint_repository_location())
+
 if os.path.exists(path):
     shutil.rmtree(path)
     os.mkdir(path)
@@ -390,24 +390,6 @@ shutil.copy(HCK, HCKS)
 print('Copying HostCert.key')
 
 if os.path.exists(EIPSET):
-    try:
-        tree = ET.parse(EIPSET)
-        content = tree.getroot()
-        for LogDB in content.findall('LogDB'):
-            SQLSERVER = str(LogDB.find('Host').text)
-            SQLPORT = str(LogDB.find('Port').text)
-            SQLINSTANCE = str(LogDB.find('InstanceName').text)
-            #SQLUSER = str(LogDB.find('Username').text)
-            #SQLDOMAIN = str(LogDB.find('Domain').text)
-            #SQLPASS = str(LogDB.find('Password').text)
-        if SQLINSTANCE == 'None' or SQLINSTANCE == '':
-            SQLSERVER == SQLSERVER
-        else:
-            SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
-    except OSError:
-        print('ERROR: Unable to read EIPSettings.xml')
-
-if os.path.exists(EIPSET):
     print('Found EIPSettings.xml')
     try:
         tree = ET.parse(EIPSET)
@@ -463,11 +445,11 @@ def run_sql_scripts(db_cursor):
                     for row in query_results:
                         output_file.write('%s\n' % str(row))
                 output_file.close
-    except:
+    except IOError:
         print('ERROR: Unable to run SQL scripts.')
 
 try:
-    print('Connecting to database using Windows Authentication for user "' + win32api.GetUserName() + '"')
+    print('Connecting to database using Windows Authentication for current user "' + win32api.GetUserName() + '"')
     conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (SQLSERVER))
     cursor = conn.cursor()
     print('Successfully connected to database!')
@@ -480,15 +462,24 @@ except:
 if windows_auth == False:
     try:
         print('Trying SQL Authentication. Please enter valid SQL database credentials.')
-        #prompt user for SQL authentication credentials
-        user = raw_input('Username: ')
+        try:
+            py_version = platform.python_version()
+            major, minor, patch = [int(x, 10) for x in py_version.split('.')]
+            if major == 3:
+                #python 3.x implementation
+                user = input('Username: ')
+            elif major == 2:
+                #python 2.x implementation
+                user = raw_input('Username: ')
+        except NotImplementedError:
+            print('Unknown version of Python')
         passwd = getpass.getpass('Password: ')
         conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (SQLSERVER, user, passwd))
         cursor = conn.cursor()
         print('Successfully connected to database!')
         run_sql_scripts(cursor)
         conn.close()
-    except:
+    except IOError:
         print('ERROR: Could not establish connection to database via SQL Authentication for user "' + user + '"')
 
 enable_file_system_redirection().__enter__()
@@ -678,13 +669,7 @@ f = open(FULL_PATH, 'w')
 gpresult = '%s\\System32\\gpresult' % SYSROOT
 SYSINFO = subprocess.call([gpresult, '/r'], stdout=f)
 f.close
-print('Thank you for running SVOS.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.')
-
-print('AP-DATA verion')
-print(getDSversion())
-
-print('Forensics Repository location')
-print(getrepolocation())
+print('Thank you for running Forcepoint Support Assist.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.')
 
 def main():
     zipper('%s\\SVOS' % TMP, '%s\\FP.zip' % TMP)
@@ -704,6 +689,6 @@ def zipper(dir, zip_file):
     return zip_file
 
 
-    if __name__ == '__main__':
+if __name__ == '__main__':
         main()
 shutil.move('%s\\FP.zip' % TMP, FPARCHIVE)
