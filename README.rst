@@ -31,6 +31,9 @@ Releases
 * v0.1.1
     Hotfix - Fixed an issue causing script to exit prematurely due to permission issue with DSS apache logs
 
+* v0.1.2
+    HHotfix - Fixed IndexError when parsing EIPSettings.xml due to changes introduced in EIP v8.5.2.
+
 Credits
 -------
 
