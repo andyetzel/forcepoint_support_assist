@@ -24,7 +24,7 @@ import getpass
 import win32api
 
 
-print('Forcepoint Support Assist v0.1.2')
+print('Forcepoint Support Assist v0.1.3')
 
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
