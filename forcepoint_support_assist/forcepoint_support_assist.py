@@ -179,7 +179,7 @@ class Logger(object):
 
 sys.stdout = Logger(DEBUG_LOG)
 
-print('Forcepoint Support Assist v0.2.0')
+print('Forcepoint Support Assist v0.3.0')
 
 if DSS_DIR == 'NONE':
     servicemanager.LogInfoMsg('This system  is not a Forcepoint DLP Server.  The Forcepoint Support Assist script will exit now.')
