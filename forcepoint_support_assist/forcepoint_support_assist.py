@@ -148,6 +148,7 @@ def fingerprint_repository_location():
 
 
 TMP_DIR = os.getenv('TMP', 'NONE')
+SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
 USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
 EIP_DIR = get_eip_path()
@@ -158,20 +159,30 @@ AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE') #activemqhome
 JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
 HOST_NAME = socket.gethostname() #HOSTNAME
 FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
-# File = 'logfile.log'
+DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
 
 # Create SVOS directory in temp, delete old if exists
-SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 if os.path.exists(SVOS_DIR):
     shutil.rmtree(SVOS_DIR)
     os.mkdir(SVOS_DIR)
 else:
     os.mkdir(SVOS_DIR)
 
+class Logger(object):
+    def __init__(self, filename='Default.log'):
+        self.terminal = sys.stdout
+        self.log = open(filename, 'a')
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+sys.stdout = Logger(DEBUG_LOG)
+
 print('Forcepoint Support Assist v0.2.0')
 
 if DSS_DIR == 'NONE':
-    servicemanager.LogInfoMsg('Not a Forcepoint DLP Server.  Stopping.')
+    servicemanager.LogInfoMsg('This system  is not a Forcepoint DLP Server.  The Forcepoint Support Assist script will exit now.')
     sys.exit()
 
 collect_me = '''
@@ -224,19 +235,6 @@ collect_me = '''
 # print('Fingerprint Repository location')
 # print(fingerprint_repository_location())
 
-
-# class Logger(object):
-
-#     def __init__(self, filename='Default.log'):
-#         self.terminal = sys.stdout
-#         self.log = open(filename, 'a')
-
-#     def write(self, message):
-#         self.terminal.write(message)
-#         self.log.write(message)
-
-# sys.stdout = Logger(SVOS_DIR)
-
 def copy_data(src,dst):
     try:
         if os.path.isdir(src):
@@ -244,15 +242,15 @@ def copy_data(src,dst):
                 # shutil.copytree(src, dst, dirs_exist_ok=True)
                 # print('Copied directory ' + src)
                 copy_tree(src, dst, preserve_times=1)
-                print('Copied directory ' + src)
+                print('Directory: ' + src)
             except OSError: # python >2.5
-                print('WARN: Unable to copy directory! Skipping...')
+                print('WARN: Unable to copy directory. Skipping...')
         if os.path.isfile(src):
             try:
                 shutil.copy2(src, dst)
-                print('Copied file ' + src)
+                print('File: ' + src)
             except:
-                print('WARN: Unable to copy file ' + src + '! Skipping...')
+                print('WARN: Unable to copy file ' + src + '. Skipping...')
     except IOError:
         raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
 
