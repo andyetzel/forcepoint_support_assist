@@ -42,6 +42,9 @@ Releases
 * v0.2.0
     Refactored code for readability and maintainability
 
+* v0.3.0
+    Added debug logging capability
+
 Credits
 -------
 
