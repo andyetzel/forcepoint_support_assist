@@ -22,9 +22,13 @@ import time
 import platform
 import getpass
 import win32api
+from distutils.dir_util import copy_tree
 
+try:
+    import json
+except ImportError:
+    import simplejson as json 
 
-print('Forcepoint Support Assist v0.1.3')
 
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
@@ -54,8 +58,7 @@ class enable_file_system_redirection:
             self._revert(self.old_value)
 
 
-def getEIPpath():
-    exists = True
+def get_eip_path():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
@@ -143,256 +146,167 @@ def fingerprint_repository_location():
     except NotImplementedError:
         print('Unknown version of Python')
 
-EIP = getEIPpath()
-TMP = os.getenv('TMP', 'NONE')
-dsshome = os.getenv('DSS_HOME', 'NONE')
-print('AP-DATA Detected.  Proceeding with data collection.')
-if dsshome == 'NONE':
-    servicemanager.LogInfoMsg('No AP-DATA Manager Detected.  Stopping')
+
+TMP_DIR = os.getenv('TMP', 'NONE')
+SYS_ROOT = os.getenv('SystemRoot', 'NONE')
+USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
+EIP_DIR = get_eip_path()
+DSS_DIR = os.getenv('DSS_HOME', 'NONE')
+JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
+PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
+AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE') #activemqhome
+JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
+HOST_NAME = socket.gethostname() #HOSTNAME
+FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
+# File = 'logfile.log'
+
+# Create SVOS directory in temp, delete old if exists
+SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
+if os.path.exists(SVOS_DIR):
+    shutil.rmtree(SVOS_DIR)
+    os.mkdir(SVOS_DIR)
+else:
+    os.mkdir(SVOS_DIR)
+
+print('Forcepoint Support Assist v0.2.0')
+
+if DSS_DIR == 'NONE':
+    servicemanager.LogInfoMsg('Not a Forcepoint DLP Server.  Stopping.')
     sys.exit()
-path = '%s\\SVOS' % TMP
+
+collect_me = '''
+{
+  "EIP": [
+    {"source": "/EIPSettings.xml", "destination": "/EIP/"},
+    {"source": "/apache/logs/", "destination": "/EIP/apache/"},
+    {"source": "/tomcat/logs/", "destination": "/EIP/tomcat/"},
+    {"source": "/logs/", "destination": "/EIP/logs/"}
+  ],
+  "DSS": [
+    {"source": "/Logs/", "destination": "/DSS/Logs"},
+    {"source": "/ResourceResolver/ResourceResolverServerMaster.db", "destination": "/DSS/ResourceResolver/"},
+    {"source": "/tomcat/conf/Catalina/localhost/dlp.xml", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/conf/catalina.properties", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/logs/", "destination": "/DSS/tomcat/"},
+    {"source": "/apache/conf/httpd.conf", "destination": "/DSS/apache/"},
+    {"source": "/apache/conf/extra/httpd-ssl.conf", "destination": "/DSS/apache/"},
+    {"source": "/apache/logs/", "destination": "/DSS/apache/"},
+    {"source": "/keys/ep_cluster.key", "destination": "/DSS/keys/"},
+    {"source": "/keys/machine.key", "destination": "/DSS/keys/"},
+    {"source": "/ConfigurationStore/", "destination": "/DSS/ConfigurationStore/"},
+    {"source": "/Data-Batch-Server/service-container/container/logs/service_logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/service-container/container/logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server//service-container/container/etc/jetty.xml", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "EndPointServer.config.xml", "destination": "/DSS/"},
+    {"source": "/ca.cer", "destination": "/DSS/"},
+    {"source": "/conf/", "destination": "/DSS/conf/"},
+    {"source": "/extractor.config.xml", "destination": "/DSS/"},
+    {"source": "/mediator/logs/mediator.out", "destination": "/DSS/mediator/"},
+    {"source": "/Data-Batch-Server/logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/MessageBroker/data/activemq.log", "destination": "/DSS/MessageBroker/"},
+    {"source": "/MessageBroker/data/audit.log", "destination": "/DSS/MessageBroker/"},
+    {"source": "/MessageBroker/data/service_logs/", "destination": "/DSS/MessageBroker/"},
+    {"source": "/OCRServer.config.xml", "destination": "/DSS/"},
+    {"source": "/FileEncryptor.log", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.policy.xml", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.policy.xml.bak", "destination": "/DSS/"},
+    {"source": "/allcerts.cer", "destination": "/DSS/"},
+    {"source": "/HostCert.key", "destination": "/DSS/"},
+    {"source": "/Data-Batch-Server/service-container/container/webapps/data-batch-services.xml", "destination": "/DSS/Data-Batch-Server/"}
+  ],
+  "WINDOWS": [
+    {"source": "C:/Windows/System32/winevt/Logs/Application.evtx", "destination": "/Windows/"},
+    {"source": "C:/Windows/System32/winevt/Logs/System.evtx", "destination": "/Windows/"}
+  ]
+}
+'''
+
+# print('Fingerprint Repository location')
+# print(fingerprint_repository_location())
+
+
+# class Logger(object):
+
+#     def __init__(self, filename='Default.log'):
+#         self.terminal = sys.stdout
+#         self.log = open(filename, 'a')
+
+#     def write(self, message):
+#         self.terminal.write(message)
+#         self.log.write(message)
+
+# sys.stdout = Logger(SVOS_DIR)
+
+def copy_data(src,dst):
+    try:
+        if os.path.isdir(src):
+            try:
+                # shutil.copytree(src, dst, dirs_exist_ok=True)
+                # print('Copied directory ' + src)
+                copy_tree(src, dst, preserve_times=1)
+                print('Copied directory ' + src)
+            except OSError: # python >2.5
+                print('WARN: Unable to copy directory! Skipping...')
+        if os.path.isfile(src):
+            try:
+                shutil.copy2(src, dst)
+                print('Copied file ' + src)
+            except:
+                print('WARN: Unable to copy file ' + src + '! Skipping...')
+    except IOError:
+        raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
+
+def detect_json_config():
+    #Look for custom JSON settings
+    if os.path.isfile('custom.json'):
+         print('Using custom JSON configuration.')
+         custom_file = 'custom.json'
+         with open(custom_file) as f:
+            return json.loads(f.read())
+    else:
+         print('Using default JSON configuration.')
+         return json.loads(collect_me)
+         
+def parse_json_config():
+    data_set = detect_json_config()
+    for category in data_set:
+        if category == "EIP":
+            print('\n===== Copying EIP logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = EIP_DIR + item['source']
+                copy_data(src_path,dst_path)
+        if category == "DSS":
+            print('\n===== Copying DSS logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = DSS_DIR + item['source']
+                copy_data(src_path,dst_path)
+        if category == "WINDOWS":
+            print('\n===== Copying Windows Event logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = item['source']
+                copy_data(src_path,dst_path)
+
 
 print('AP-DATA verion')
 print(getDSversion())
 
-print('Fingerprint Repository location')
-print(fingerprint_repository_location())
+#Start log collection
+parse_json_config()
 
-if os.path.exists(path):
-    shutil.rmtree(path)
-    os.mkdir(path)
-else:
-    os.mkdir(path)
-SYSROOT = os.getenv('SystemRoot', 'none')
-TMP = os.getenv('TMP', 'NONE')
-LOGS = '%s\\Logs\\' % dsshome
-DSS = '%s\\SVOS\\DSSLogs' % TMP
-JETTYHOME = os.getenv('JETTY_HOME', 'NONE')
-RRDB = '%s\\ResourceResolver\\ResourceResolverServerMaster.db' % dsshome
-RR = '%s\\SVOS\\RR.db' % TMP
-DLPXML = '%s\\tomcat\\conf\\Catalina\\localhost\\dlp.xml' % dsshome
-DLPCONF = '%s\\SVOS\\DLP.xml' % TMP
-CATPROP = '%s\\tomcat\\conf\\catalina.properties' % dsshome
-CATALINAPROPERTIES = '%s\\SVOS\\catalina.properties' % TMP
-EIPSET = '%s\\EIPSettings.xml' % EIP
-EIPXML = '%s\\SVOS\\EIPSettings.xml' % TMP
-HTTPC = '%s\\apache\\conf\\httpd.conf' % dsshome
-HTTPconf = '%s\\SVOS\\httpd.conf' % TMP
-HTTPSSLC = '%s\\apache\\conf\\extra\\httpd-ssl.conf' % dsshome
-HTTPSconf = '%s\\SVOS\\httpd-ssl.conf' % TMP
-EP_CLUSTER_KEY = '%s\\keys\\ep_cluster.key' % dsshome
-EPCKEY = '%s\\SVOS\\ep_cluster.key' % TMP
-Machine_KEY = '%s\\keys\\machine.key' % dsshome
-MAC_KEY = '%s\\SVOS\\machine.key' % TMP
-APPLOG = '%s\\System32\\winevt\\Logs\\Application.evtx' % SYSROOT
-SYSLOG = '%s\\System32\\winevt\\Logs\\System.evtx' % SYSROOT
-APPLICATION = '%s\\SVOS\\application.evtx' % TMP
-SYSTEM = '%s\\SVOS\\system.evtx' % TMP
-CONFSTORE = '%s\\ConfigurationStore\\' % dsshome
-CONFIGSTORE = '%s\\SVOS\\ConfigurationStore' % TMP
-BATCHSERVLF = '%sData-Batch-Server\\service-container\\container\\logs\\service_logs\\' % dsshome
-BATCHSERV = '%s\\service-container\\container\\logs\\' % JETTYHOME
-DBATCHLOG = '%s\\SVOS\\BatchServerlogs\\' % TMP
-TOM = '%s\\tomcat\\logs\\' % dsshome
-TOMCAT = '%s\\SVOS\\TomcatLogs\\' % TMP
-EPSERVERCONF = '%sEndPointServer.config.xml' % dsshome
-EPSERVERCONFIG = '%s\\SVOS\\EndPointServer.config.xml' % TMP
-HOSTNAME = socket.gethostname()
-userprofile = os.getenv('USERPROFILE', 'NONE')
-FPARCHIVE = datetime.now().strftime(userprofile + '\\Desktop\\SVOS_' + '_' + HOSTNAME + '_%Y%m%d-%H%M%S.zip')
-DIR = '%s\\SVOS' % TMP
-File = 'logfile.log'
-FULL_PATH = os.path.join(DIR, File)
-CACER = '%s\\ca.cer' % dsshome
-KEYS = '%s\\keys\\' % dsshome
-CONF = '%s\\conf\\' % dsshome
-CANON = '%s\\canonizer.config.xml' % dsshome
-CANONconf = '%s\\SVOS\\canonizer.config.xml' % TMP
-EXTRACTconf = '%s\\extractor.config.xml' % dsshome
-EXTconf = '%s\\SVOS\\extractor.config.xml' % TMP
-EXTRACTLINconf = '%s\\extractorlinux.config.xml' % dsshome
-EXTLINconf = '%s\\SVOS\\extractorlinux.config.xml' % TMP
-EIPTOMLOGS = '%s\\tomcat\\logs\\' % EIP
-EIPTOMLOGDIR = '%s\\SVOS\\EIPTOMLOGS\\' % TMP
-EIPLOGS = '%s\\logs\\' % EIP
-EIPLOGDIR = '%s\\SVOS\\EIPLOGS\\' % TMP
-JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTYHOME
-EIPapachelogs = '%s\\apache\\logs\\' % EIP
-EIPAPACHELOGS = '%s\\SVOS\\EIPapachelogs\\' % TMP
-APACHELOGS = '%sapache\\logs\\' % dsshome
-DSSAPACHELOGS = '%s\\SVOS\\DSSapachelogs\\' % TMP
-DBATCHSERV = '%s\\logs\\' % JETTYHOME
-DBATCHLOG801 = '%s\\SVOS\\BatchServerlog801\\' % TMP
-MBMQ = '%s\\MessageBroker\\data\\activemq.log' % dsshome
-ACMQ = '%s\\SVOS\\activemq.log' % TMP
-MBAU = '%s\\MessageBroker\\data\\audit.log' % dsshome
-MBAUD = '%s\\SVOS\\audit.log' % TMP
-SERLOG = '%s\\MessageBroker\\data\\service_logs\\' % dsshome
-SERVLOG = '%s\\SVOS\\MessageBrokerSvclogs\\' % TMP
-OCR = '%s\\OCRServer.config.xml' % dsshome
-OCRConfig = '%s\\SVOS\\OCRServer.config.xml' % TMP
-FileEncryptor = '%s\\FileEncryptor.log' % dsshome
-FE = '%s\\SVOS\\FileEncryptor.log' % TMP
-PEP = '%s\\PolicyEngine.policy.xml' % dsshome
-PEPS = '%s\\SVOS\\PolicyEngine.policy.xml' % TMP
-PEPB = '%s\\PolicyEngine.policy.xml.bak' % dsshome
-PEPBS = '%s\\SVOS\\PolicyEngine.policy.xml.bak' % TMP
-AC = '%s\\allcerts.cer' % dsshome
-ACS = '%s\\SVOS\\allcerts.cer' % TMP
-CA = '%s\\ca.cer' % dsshome
-CAS = '%s\\SVOS\\ca.cer' % TMP
-HCK = '%s\\HostCert.key' % dsshome
-HCKS = '%s\\SVOS\\HostCert.key' % TMP
-
-class Logger(object):
-
-    def __init__(self, filename='Default.log'):
-        self.terminal = sys.stdout
-        self.log = open(filename, 'a')
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-
-
-sys.stdout = Logger(FULL_PATH)
-shutil.copytree(LOGS, DSS)
-print('Copying DSS home')
-shutil.copy(RRDB, RR)
-print('Copying Resource Resolver')
-if os.path.isfile(DLPXML):
-    shutil.copy(DLPXML, DLPCONF)
-    print('Copying DLP.xml')
-else:
-    print('Not a Triton Manager, No dlp.xml, moving on.')
-if os.path.isdir(TOM):
-    shutil.copy(CATPROP, CATALINAPROPERTIES)
-    print('Copying catalina.properties')
-else:
-    print('Not a Triton Manager, No catalina.properties, moving on.')
-if os.path.isfile(EIPSET):
-    shutil.copy(EIPSET, EIPXML)
-    print('Copying EIP Settings')
-else:
-    print('Not a Triton Manager, No EIPSettings, moving on.')
-if os.path.isdir(BATCHSERV):
-    shutil.copytree(BATCHSERV, DBATCHLOG)
-    print('Copying Batch server logs')
-else:
-    print('Not a Triton Manager, or a legacy manager. No Batch Server, moving on.')
-shutil.copy(HTTPC, HTTPconf)
-print('Copying http config')
-shutil.copy(HTTPSSLC, HTTPSconf)
-print('Copying https config')
-shutil.copy(EP_CLUSTER_KEY, EPCKEY)
-print('Coying EP_Cluster.key')
-shutil.copy(Machine_KEY, MAC_KEY)
-print('Copying machine.key')
-shutil.copy(APPLOG, APPLICATION)
-print('Copying Windows Application Event Logs')
-shutil.copy(SYSLOG, SYSTEM)
-print('Copying Windows System Event Logs')
-shutil.copytree(CONFSTORE, CONFIGSTORE)
-print('Copying ConfigurationStore')
-print('Copying canonizer config')
-shutil.copy(CANON, CANONconf)
-print('Copying extractor config')
-shutil.copy(EXTRACTconf, EXTconf)
-print('Copying extractorlinux config')
-shutil.copy(EXTRACTLINconf, EXTLINconf)
-if os.path.isdir(TOM):
-    shutil.copytree(TOM, TOMCAT)
-    print('Copying Tomcat logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-shutil.copy(EPSERVERCONF, EPSERVERCONFIG)
-print('Copying EndPointServer Configuration')
-if os.path.isfile(EIPSET):
-    shutil.copytree(EIPTOMLOGS, EIPTOMLOGDIR)
-    print('Copying EIP Tomcat logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isfile(EIPSET):
-    shutil.copytree(EIPLOGS, EIPLOGDIR)
-    print('Copying EIP Install logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isdir(EIPapachelogs):
-    shutil.copytree(EIPapachelogs, EIPAPACHELOGS)
-    print('Copying EIP Apache logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isfile(FileEncryptor):
-    shutil.copy(FileEncryptor, FE)
-    print('Copying File Encryptor log')
-else:
-    print('Not a Triton Manager, or a legacy manager. No file encryptor log, moving on.')
-
-print('Copying DSS apache logs')
-try:
-    src = APACHELOGS
-    dst = DSSAPACHELOGS
-    if os.path.exists(dst):
-        shutil.rmtree(dst)
-        os.mkdir(dst)
-    else:
-        os.mkdir(dst)
-    if os.path.isdir(src):
-        for filename in os.listdir(src):
-            try:
-                source_file = src + filename
-                shutil.copy2(source_file, dst)
-            except IOError:
-                print('WARN: Unable to copy file ' + source_file + '! Skipping...')
-    if os.path.isfile(src):
-        try:
-            source_file = src
-            shutil.copy2(source_file, dst)
-        except IOError:
-            print('WARN: Unable to copy file ' + source_file + '! Skipping...')
-except IOError:
-    raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
-
-if os.path.isdir(DBATCHSERV):
-    shutil.copytree(DBATCHSERV, DBATCHLOG801)
-    print('Copying Batch server logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isdir(SERLOG):
-    shutil.copytree(SERLOG, SERVLOG)
-    print('Copying Message Broker Service logs')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isfile(MBAU):
-    shutil.copy(MBAU, MBAUD)
-    print('Copying Message Broker Audit log')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isfile(MBMQ):
-    shutil.copy(MBMQ, ACMQ)
-    print('Copying Message Broker activemq log')
-else:
-    print('Not a Triton Manager, No Tomcat logs, moving on.')
-if os.path.isfile(OCR):
-    shutil.copy(OCR, OCRConfig)
-    print('Copying OCR server config')
-else:
-    print('Not a secondary server. No OCR config file, moving on')
-shutil.copy(PEP, PEPS)
-print('Copying policyenginge.policy.xml')
-shutil.copy(PEPB, PEPBS)
-print('Copying policyenginge.policy.xml.bak')
-shutil.copy(AC, ACS)
-print('Copying allcerts.cer')
-shutil.copy(CA, CAS)
-print('Copying ca.cer')
-shutil.copy(HCK, HCKS)
-print('Copying HostCert.key')
-
-if os.path.exists(EIPSET):
+EIP_XML = EIP_DIR + "/EIPSettings.xml"
+if os.path.exists(EIP_XML):
     print('Found EIPSettings.xml')
     try:
-        tree = ET.parse(EIPSET)
+        tree = ET.parse(EIP_XML)
         content = tree.getroot()
         for LogDB in content.findall('LogDB'):
             SQLSERVER = str(LogDB.find('Host').text)
@@ -412,6 +326,22 @@ if os.path.exists(EIPSET):
         print('ERROR: Unable to read EIPSettings.xml')
 else:
     print('ERROR: Unable to locate EIPSettings.xml')
+
+def log_system_details():
+    FULL_PATH = os.path.join(SVOS_DIR, 'System_Variables.txt')
+    f = open(FULL_PATH, 'w')
+    try:
+        f.writelines('HOSTNAME:' + HOST_NAME + '\n')
+        f.writelines('DSS_HOME:' + DSS_DIR + '\n')
+        f.writelines('PYTHONPATH:' + PYTHON_DIR + '\n')
+        f.writelines('JETTY_HOME:' + JETTY_DIR + '\n')
+        f.writelines('JRE_HOME:' + JRE_DIR + '\n')
+        f.writelines('ACTIVEMQ_HOME:' + AMQ_DIR + '\n')
+        if EIP_DIR != 'NONE':
+            f.writelines('SQL Server IP:' + SQLSERVER + '\n')
+            f.writelines('Managers Installed: ' + MANAGERS + '\n')
+    finally:
+        f.close
 
 def run_sql_scripts(db_cursor):
     sql_script_params = [
@@ -433,7 +363,7 @@ def run_sql_scripts(db_cursor):
         {"CRAWLER_TASKS.csv": "SELECT (select COUNT (*) from WS_PLC_CC_FILE_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_DB_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_MACHINE_LEARNING) + (select COUNT (*) from WS_PLC_DISCOVERY_TASKS)"},
         {"UNHOOKED_APPS.csv": "select STR_VALUE from WS_ENDPNT_GLOB_CONFIG_PROPS where NAME = 'generalExcludedApplications'"}
     ]
-    DIR = '%s\\SVOS' % TMP
+    DIR = '%s\\SVOS' % TMP_DIR
     print('Running SQL scripts...')
     try:
         for param in sql_script_params:
@@ -452,7 +382,7 @@ try:
     print('Connecting to database using Windows Authentication for current user "' + win32api.GetUserName() + '"')
     conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (SQLSERVER))
     cursor = conn.cursor()
-    print('Successfully connected to database!')
+    print('Connected to database.')
     windows_auth = True
     run_sql_scripts(cursor)
 except:
@@ -476,7 +406,7 @@ if windows_auth == False:
         passwd = getpass.getpass('Password: ')
         conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (SQLSERVER, user, passwd))
         cursor = conn.cursor()
-        print('Successfully connected to database!')
+        print('Connected to database.')
         run_sql_scripts(cursor)
         conn.close()
     except IOError:
@@ -485,48 +415,49 @@ if windows_auth == False:
 enable_file_system_redirection().__enter__()
 
 print('Gathering OS info.  This may take a few minutes.  Please be patient.')
-msinfo = '%s\\System32\\msinfo32' % SYSROOT
-msinfoout = '%s\\SVOS\\SVOS.txt' % TMP
+msinfo = '%s\\System32\\msinfo32' % SYS_ROOT
+msinfoout = '%s\\SVOS\\SVOS.txt' % TMP_DIR
 subprocess.call([msinfo, '/report', msinfoout])
-for filename in os.listdir(CONF):
-    with open(CONF + filename) as currentfile:
-        text = currentfile.read()
-        if 'DEBUG' in text or 'debug' in text:
-            print(filename + ' ' + ' in debug mode')
 
+def check_dlp_debugging():
+    DSS_CONF = DSS_DIR + '/conf'
+    for filename in os.listdir(DSS_CONF):
+        with open(DSS_CONF + filename) as currentfile:
+            text = currentfile.read()
+            if 'DEBUG' in text or 'debug' in text:
+                print(filename + ' ' + ' in debug mode')
+
+
+CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
 if os.path.isfile(CATPROP):
-    print('The following are the cluster keys from Catalina.Properties, ca.cer, ep_cluster.key, and jetty.xml in that order')
-
+    print('The following are the cluster keys from Catalina.Properties: ca.cer, ep_cluster.key, and jetty.xml, in that order')
     def catprop():
         searchfile = open(CATPROP, 'r')
         for line in searchfile:
             if 'wbsn' in line:
                 return line
-
-
     catdawg = catprop()
     cat = catdawg.replace('wbsn.com.pa.crypto.crypto.PAISCryptorV2.key=', '')
     cat1 = cat.split(':')
     cat2 = cat1[2] + ' ' + cat1[0] + ' ' + cat1[1]
     cat3 = cat2.replace('\n', ' ')
-    os.chdir(dsshome)
+    os.chdir(DSS_DIR)
     cmd2 = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + cat3
     CONVERTPW2 = os.popen(cmd2).read()
     print('catalina properties')
     print(CONVERTPW2)
-
     def ca():
+        CACER = '%s\\ca.cer' % DSS_DIR
         search = open(CACER, 'r')
         for line in search:
             if line.startswith('{4;'):
                 return line
-
-
     cacert = ca()
     ctool = 'cryptotool -k 4 -d -t' + ' ' + cacert
     CONVERT3 = os.popen(ctool).read()
     print('ca.cer')
     print(CONVERT3)
+    KEYS = '%s\\keys\\' % DSS_DIR
     os.chdir(KEYS)
     ctool2 = 'cryptotool -k 2 -g'
     CONVERT4 = os.popen(ctool2).read()
@@ -534,33 +465,35 @@ if os.path.isfile(CATPROP):
     print(CONVERT4)
 else:
     print('Not a Triton Management Server, moving on')
-if os.path.isfile(JETTYXML):
 
+
+JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
+if os.path.isfile(JETTYXML):
     def jettyprop():
         searchfile = open(JETTYXML, 'r')
         for line in searchfile:
             if 'wsjf' in line:
                 return line
-
-
     jettydawg = jettyprop()
     j1 = re.sub('<[^>]*>', '', jettydawg)
     j2 = j1.replace('\n', '')
     j3 = j2.replace(' ', '')
     j4 = j3.split(':')
     j5 = j4[2] + ' ' + j4[0] + ' ' + j4[1]
-    os.chdir(dsshome)
+    os.chdir(DSS_DIR)
     jettycmd = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + j5
     CONVERTPW3 = os.popen(jettycmd).read()
     print('jetty.xml')
     print(CONVERTPW3)
 else:
     print('Not a Triton manager or version is below 8.1')
-DIR = '%s\\SVOS' % TMP
+
+
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'DEP.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
-wm = '%s\\System32\\wbem\\WMIC.exe' % SYSROOT
+wm = '%s\\System32\\wbem\\WMIC.exe' % SYS_ROOT
 DEP = subprocess.call([wm, 'OS', 'Get', 'DataExecutionPrevention_SupportPolicy'], stdout=f)
 DEPSTR = str(DEP)
 f.close
@@ -571,54 +504,35 @@ try:
 finally:
     f.close
 
-if os.path.exists(EIPSET):
-    tree = ET.parse(EIPSET)
+
+if os.path.exists(EIP_XML):
+    tree = ET.parse(EIP_XML)
     content = tree.getroot()
     for InstalledComponents in content.findall('InstalledComponents'):
         MANAGERS = str(InstalledComponents.find('Managers').text)
-
 else:
     print('Not a Triton Management Server, or a legacy manager. Moving on')
-jettyhome = os.getenv('JETTY_HOME', 'NONE')
-pythonpath = os.getenv('PYTHONPATH', 'NONE')
-activemqhome = os.getenv('ACTIVEMQ_HOME', 'NONE')
-javahome = os.getenv('JRE_HOME', 'NONE')
-DIR = '%s\\SVOS' % TMP
-File = 'System_Variables.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-try:
-    f.writelines('HOSTNAME:' + HOSTNAME + '\n')
-    f.writelines('DSS_HOME:' + dsshome + '\n')
-    f.writelines('PYTHONPATH:' + pythonpath + '\n')
-    f.writelines('JETTY_HOME:' + jettyhome + '\n')
-    f.writelines('JRE_HOME:' + javahome + '\n')
-    f.writelines('ACTIVEMQ_HOME:' + activemqhome + '\n')
-    if os.path.exists(EIPSET):
-        f.writelines('SQL Server IP:' + SQLSERVER + '\n')
-        f.writelines('Managers Installed: ' + MANAGERS + '\n')
-finally:
-    f.close
 
-DIR = '%s\\SVOS' % TMP
+
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'netstat.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
-ns = '%s\\System32\\NETSTAT' % SYSROOT
+ns = '%s\\System32\\NETSTAT' % SYS_ROOT
 NS = subprocess.call([ns, '-abno'], stdout=f)
 f.close
-DIR = '%s\\SVOS' % TMP
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'sysinfo.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
-sinfo = '%s\\System32\\systeminfo' % SYSROOT
+sinfo = '%s\\System32\\systeminfo' % SYS_ROOT
 SYSINFO = subprocess.call([sinfo], stdout=f)
 f.close
-DIR = '%s\\SVOS' % TMP
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'service_info.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
-serco = '%s\\System32\\sc' % SYSROOT
+serco = '%s\\System32\\sc' % SYS_ROOT
 dssservice = subprocess.call([serco, 'qc', 'DSSMANAGER', '5000'], stdout=f)
 eipservice = subprocess.call([serco, 'qc', 'EIPMANAGER', '5000'], stdout=f)
 sqlservice = subprocess.call([serco, 'qc', 'MSSQLSERVER', '5000'], stdout=f)
@@ -632,7 +546,7 @@ mgmtdservice = subprocess.call([serco, 'qc', 'MGMTD', '5000'], stdout=f)
 pgsqlservice = subprocess.call([serco, 'qc', 'PGSQLEIP', '5000'], stdout=f)
 eipproxyservice = subprocess.call([serco, 'qc', 'EIPMANAGERPROXY', '5000'], stdout=f)
 f.close
-DIR = '%s\\SVOS' % TMP
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'memory_cpu_hdd.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
@@ -641,15 +555,19 @@ SYSINFO = subprocess.call([wm, 'cpu', 'Get', 'Name,', 'NumberOfCores,', 'NumberO
 SYSINFO = subprocess.call([wm, 'logicaldisk', 'Get', 'Name,', 'Size,', 'Freespace'], stdout=f)
 f.close
 time.sleep(5)
-for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP, 'r'):
+
+
+for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP_DIR, 'r'):
     if 'TotalPhysicalMemory' in line:
         print(line)
 
-for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP, 'r'):
+
+for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP_DIR, 'r'):
     if 'TotalPhysicalMemory' in line:
         print(re.findall('\\d+', line))
 
-DIR = '%s\\SVOS' % TMP
+
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'RunningAntiVirus.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
@@ -662,17 +580,19 @@ while True:
     else:
         break
 
-DIR = '%s\\SVOS' % TMP
+
+DIR = '%s\\SVOS' % TMP_DIR
 File = 'GPO_Info.txt'
 FULL_PATH = os.path.join(DIR, File)
 f = open(FULL_PATH, 'w')
-gpresult = '%s\\System32\\gpresult' % SYSROOT
+gpresult = '%s\\System32\\gpresult' % SYS_ROOT
 SYSINFO = subprocess.call([gpresult, '/r'], stdout=f)
 f.close
-print('Thank you for running Forcepoint Support Assist.  When the command prompt returns, the archive process will be complete and the generated file can be found in ' + userprofile + '\\Desktop\\.  Please send this to your Forcepoint Representative for review.')
+print('Thank you for running Forcepoint Support Assist.  \nA zip file can be found here: ' + USER_PROFILE_DIR + '\\Desktop\\.  \nPlease send this file to Forcepoint Support for review.')
+
 
 def main():
-    zipper('%s\\SVOS' % TMP, '%s\\FP.zip' % TMP)
+    zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
 
 
 def zipper(dir, zip_file):
@@ -684,11 +604,10 @@ def zipper(dir, zip_file):
             fullpath = os.path.join(root, f)
             archive_name = os.path.join(archive_root, f)
             zip.write(fullpath, archive_name, zipfile.ZIP_DEFLATED)
-
     zip.close()
     return zip_file
 
 
 if __name__ == '__main__':
         main()
-shutil.move('%s\\FP.zip' % TMP, FPARCHIVE)
+shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)

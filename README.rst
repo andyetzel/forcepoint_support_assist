@@ -39,6 +39,9 @@ Releases
     Fixed typos in output.
     Updated documentation.
 
+* v0.2.0
+    Refactored code for readability and maintainability
+
 Credits
 -------
 
