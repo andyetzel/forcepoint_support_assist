@@ -45,6 +45,9 @@ Releases
 * v0.3.0
     Added debug logging capability
 
+* v0.4.0
+    Refactored code, streamlined logic for subprocess calls
+
 Credits
 -------
 

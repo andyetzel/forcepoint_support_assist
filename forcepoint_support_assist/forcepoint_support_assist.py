@@ -42,7 +42,6 @@ class disable_file_system_redirection:
         if self.success:
             self._revert(self.old_value)
 
-
 disable_file_system_redirection().__enter__()
 
 class enable_file_system_redirection:
@@ -57,6 +56,15 @@ class enable_file_system_redirection:
         if self.success:
             self._revert(self.old_value)
 
+
+class Logger(object):
+    def __init__(self, filename='Default.log'):
+        self.terminal = sys.stdout
+        self.log = open(filename, 'a')
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
 
 def get_eip_path():
     try:
@@ -91,7 +99,7 @@ def get_eip_path():
     except NotImplementedError:
         print('Unknown version of Python')
 
-def getDSversion():
+def get_dss_version():
     try:
         py_version = platform.python_version()
         major, minor, patch = [int(x, 10) for x in py_version.split('.')]
@@ -100,7 +108,6 @@ def getDSversion():
     try:
         if major == 3:
             import winreg
-            #from winreg import *
             try:
                 areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
                 akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
@@ -146,12 +153,88 @@ def fingerprint_repository_location():
     except NotImplementedError:
         print('Unknown version of Python')
 
+def copy_data(src,dst):
+    try:
+        if os.path.isdir(src):
+            try:
+                # shutil.copytree(src, dst, dirs_exist_ok=True)
+                # print('Copied directory ' + src)
+                copy_tree(src, dst, preserve_times=1)
+                print('Directory: ' + src)
+            except OSError: # python >2.5
+                print('WARN: Unable to copy directory. Skipping...')
+        if os.path.isfile(src):
+            try:
+                shutil.copy2(src, dst)
+                print('File: ' + src)
+            except:
+                print('WARN: Unable to copy file ' + src + '. Skipping...')
+    except IOError:
+        raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
+
+def run_command(cmd,dst):
+    try:
+        output_file = dst
+        with open(output_file, 'a+') as f:
+            print('Command: ' + cmd)
+            subprocess.call(cmd, stdout=f)
+    except:
+        print('Cannot run command: ' + cmd)
+
+def load_json_config():
+    #Look for custom JSON settings
+    if os.path.isfile('custom.json'):
+         print('\nUsing custom JSON configuration.')
+         custom_file = 'custom.json'
+         with open(custom_file) as f:
+            return json.loads(f.read())
+    else:
+         print('\nUsing default JSON configuration.')
+         return json.loads(collect_me)
+         
+def parse_json_config():
+    data_set = load_json_config()
+    for category in data_set:
+        if category == "EIP":
+            print('\n===== EIP logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = EIP_DIR + item['source']
+                copy_data(src_path,dst_path)
+        if category == "DSS":
+            print('\n===== DSS logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = DSS_DIR + item['source']
+                copy_data(src_path,dst_path)
+        if category == "WINDOWS":
+            print('\n===== Windows Event logs =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['destination']
+                if not os.path.exists(dst_path):
+                    os.makedirs(dst_path)
+                src_path = item['source']
+                copy_data(src_path,dst_path)
+        if category == "COMMANDS":
+            print('\n===== Windows Commands =====')
+            for item in data_set[category]:
+                dst_path = SVOS_DIR + item['output']
+                # if not os.path.exists(dst_path):
+                    # os.makedirs(dst_path)
+                cmd = item['command']
+                run_command(cmd,dst_path)
+
 
 TMP_DIR = os.getenv('TMP', 'NONE')
 SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
 USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
 EIP_DIR = get_eip_path()
+EIP_XML = EIP_DIR + "/EIPSettings.xml"
 DSS_DIR = os.getenv('DSS_HOME', 'NONE')
 JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
 PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
@@ -160,30 +243,6 @@ JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
 HOST_NAME = socket.gethostname() #HOSTNAME
 FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
 DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
-
-# Create SVOS directory in temp, delete old if exists
-if os.path.exists(SVOS_DIR):
-    shutil.rmtree(SVOS_DIR)
-    os.mkdir(SVOS_DIR)
-else:
-    os.mkdir(SVOS_DIR)
-
-class Logger(object):
-    def __init__(self, filename='Default.log'):
-        self.terminal = sys.stdout
-        self.log = open(filename, 'a')
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-
-sys.stdout = Logger(DEBUG_LOG)
-
-print('Forcepoint Support Assist v0.3.0')
-
-if DSS_DIR == 'NONE':
-    servicemanager.LogInfoMsg('This system  is not a Forcepoint DLP Server.  The Forcepoint Support Assist script will exit now.')
-    sys.exit()
 
 collect_me = '''
 {
@@ -228,93 +287,67 @@ collect_me = '''
   "WINDOWS": [
     {"source": "C:/Windows/System32/winevt/Logs/Application.evtx", "destination": "/Windows/"},
     {"source": "C:/Windows/System32/winevt/Logs/System.evtx", "destination": "/Windows/"}
+  ],
+  "COMMANDS": [
+    {"command": "systeminfo", "output": "/Windows/systeminfo.txt"},
+    {"command": "gpresult /r", "output": "/Windows/gpresult.txt"},
+    {"command": "netstat -abno", "output": "/Windows/netstat.txt"},
+    {"command": "sc qc DSSMANAGER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EIPMANAGER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc MSSQLSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc PAFPREP 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc POLICYENGINE 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc DSSBATCHSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc DSSMESSAGEBROKER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EPSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc WORKSCHEDULER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc MGMTD 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc PGSQLEIP 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EIPMANAGERPROXY 5000", "output": "/Windows/services.txt"},
+    {"command": "wmic os get DataExecutionPrevention_SupportPolicy", "output": "/Windows/DEP.txt"},
+    {"command": "wmic computersystem get TotalPhysicalMemory /Value", "output": "/Windows/memory.txt"},
+    {"command": "wmic cpu get Name, NumberOfCores, NumberOfLogicalProcessors", "output": "/Windows/cpu.txt"},
+    {"command": "wmic logicaldisk Get Name, Size, Freespace", "output": "/Windows/hdd.txt"},
+    {"command": "wmic process get", "output": "/Windows/antivirus.txt"}
   ]
 }
 '''
 
+# Create SVOS directory in temp, delete old if exists
+if os.path.exists(SVOS_DIR):
+    shutil.rmtree(SVOS_DIR)
+    os.mkdir(SVOS_DIR)
+else:
+    os.mkdir(SVOS_DIR)
+
+sys.stdout = Logger(DEBUG_LOG)
+
+print('\nForcepoint Support Assist v0.4.0')
+
+if DSS_DIR == 'NONE':
+    servicemanager.LogInfoMsg('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
+    print('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
+    sys.exit()
+else:
+    print('\nForcepoint DLP verion: ' + str(get_dss_version()))
+
 # print('Fingerprint Repository location')
 # print(fingerprint_repository_location())
-
-def copy_data(src,dst):
-    try:
-        if os.path.isdir(src):
-            try:
-                # shutil.copytree(src, dst, dirs_exist_ok=True)
-                # print('Copied directory ' + src)
-                copy_tree(src, dst, preserve_times=1)
-                print('Directory: ' + src)
-            except OSError: # python >2.5
-                print('WARN: Unable to copy directory. Skipping...')
-        if os.path.isfile(src):
-            try:
-                shutil.copy2(src, dst)
-                print('File: ' + src)
-            except:
-                print('WARN: Unable to copy file ' + src + '. Skipping...')
-    except IOError:
-        raise IOError('ERROR: An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
-
-def detect_json_config():
-    #Look for custom JSON settings
-    if os.path.isfile('custom.json'):
-         print('Using custom JSON configuration.')
-         custom_file = 'custom.json'
-         with open(custom_file) as f:
-            return json.loads(f.read())
-    else:
-         print('Using default JSON configuration.')
-         return json.loads(collect_me)
-         
-def parse_json_config():
-    data_set = detect_json_config()
-    for category in data_set:
-        if category == "EIP":
-            print('\n===== Copying EIP logs =====')
-            for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
-                if not os.path.exists(dst_path):
-                    os.makedirs(dst_path)
-                src_path = EIP_DIR + item['source']
-                copy_data(src_path,dst_path)
-        if category == "DSS":
-            print('\n===== Copying DSS logs =====')
-            for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
-                if not os.path.exists(dst_path):
-                    os.makedirs(dst_path)
-                src_path = DSS_DIR + item['source']
-                copy_data(src_path,dst_path)
-        if category == "WINDOWS":
-            print('\n===== Copying Windows Event logs =====')
-            for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
-                if not os.path.exists(dst_path):
-                    os.makedirs(dst_path)
-                src_path = item['source']
-                copy_data(src_path,dst_path)
-
-
-print('AP-DATA verion')
-print(getDSversion())
 
 #Start log collection
 parse_json_config()
 
-EIP_XML = EIP_DIR + "/EIPSettings.xml"
 if os.path.exists(EIP_XML):
-    print('Found EIPSettings.xml')
     try:
         tree = ET.parse(EIP_XML)
         content = tree.getroot()
+        #Get SQL datase info
         for LogDB in content.findall('LogDB'):
             SQLSERVER = str(LogDB.find('Host').text)
             SQLPORT = str(LogDB.find('Port').text)
             SQLINSTANCE = str(LogDB.find('InstanceName').text.rstrip())
-            #SQLUSER = str(LogDB.find('Username').text)
-            #SQLDOMAIN = str(LogDB.find('Domain').text)
-            #SQLPASS = str(LogDB.find('Password').text)
         if SQLINSTANCE == 'None' or SQLINSTANCE == '':
-            SQLSERVER == SQLSERVER
+            SQLSERVER = SQLSERVER
         else:
             SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
         print('SQLSERVER is: ' + SQLSERVER)
@@ -337,7 +370,12 @@ def log_system_details():
         f.writelines('ACTIVEMQ_HOME:' + AMQ_DIR + '\n')
         if EIP_DIR != 'NONE':
             f.writelines('SQL Server IP:' + SQLSERVER + '\n')
-            f.writelines('Managers Installed: ' + MANAGERS + '\n')
+            if os.path.exists(EIP_XML):
+                tree = ET.parse(EIP_XML)
+                content = tree.getroot()
+                for InstalledComponents in content.findall('InstalledComponents'):
+                    MANAGERS = str(InstalledComponents.find('Managers').text)
+                    f.writelines('Managers Installed: ' + MANAGERS + '\n')
     finally:
         f.close
 
@@ -412,10 +450,11 @@ if windows_auth == False:
 
 enable_file_system_redirection().__enter__()
 
-print('Gathering OS info.  This may take a few minutes.  Please be patient.')
-msinfo = '%s\\System32\\msinfo32' % SYS_ROOT
-msinfoout = '%s\\SVOS\\SVOS.txt' % TMP_DIR
-subprocess.call([msinfo, '/report', msinfoout])
+def get_msinfo32():
+    print('\nGathering OS info.  This may take a few minutes.  Please be patient.')
+    msinfo_cmd = '%s\\System32\\msinfo32' % SYS_ROOT
+    msinfo_out = '%s\\SVOS\\msinfo32.txt' % TMP_DIR
+    subprocess.call([msinfo_cmd, '/report', msinfo_out])
 
 def check_dlp_debugging():
     DSS_CONF = DSS_DIR + '/conf'
@@ -429,6 +468,7 @@ def check_dlp_debugging():
 CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
 if os.path.isfile(CATPROP):
     print('The following are the cluster keys from Catalina.Properties: ca.cer, ep_cluster.key, and jetty.xml, in that order')
+    
     def catprop():
         searchfile = open(CATPROP, 'r')
         for line in searchfile:
@@ -444,6 +484,7 @@ if os.path.isfile(CATPROP):
     CONVERTPW2 = os.popen(cmd2).read()
     print('catalina properties')
     print(CONVERTPW2)
+    
     def ca():
         CACER = '%s\\ca.cer' % DSS_DIR
         search = open(CACER, 'r')
@@ -486,110 +527,8 @@ if os.path.isfile(JETTYXML):
 else:
     print('Not a Triton manager or version is below 8.1')
 
-
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'DEP.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-wm = '%s\\System32\\wbem\\WMIC.exe' % SYS_ROOT
-DEP = subprocess.call([wm, 'OS', 'Get', 'DataExecutionPrevention_SupportPolicy'], stdout=f)
-DEPSTR = str(DEP)
-f.close
-f = open(FULL_PATH, 'w')
-try:
-    f.writelines('Data Execution Prevention Status:' + DEPSTR + '\n')
-    f.writelines('0=Always Off, 1=Always On, 2=Opt In, 3=Opt out')
-finally:
-    f.close
-
-
-if os.path.exists(EIP_XML):
-    tree = ET.parse(EIP_XML)
-    content = tree.getroot()
-    for InstalledComponents in content.findall('InstalledComponents'):
-        MANAGERS = str(InstalledComponents.find('Managers').text)
-else:
-    print('Not a Triton Management Server, or a legacy manager. Moving on')
-
-
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'netstat.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-ns = '%s\\System32\\NETSTAT' % SYS_ROOT
-NS = subprocess.call([ns, '-abno'], stdout=f)
-f.close
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'sysinfo.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-sinfo = '%s\\System32\\systeminfo' % SYS_ROOT
-SYSINFO = subprocess.call([sinfo], stdout=f)
-f.close
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'service_info.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-serco = '%s\\System32\\sc' % SYS_ROOT
-dssservice = subprocess.call([serco, 'qc', 'DSSMANAGER', '5000'], stdout=f)
-eipservice = subprocess.call([serco, 'qc', 'EIPMANAGER', '5000'], stdout=f)
-sqlservice = subprocess.call([serco, 'qc', 'MSSQLSERVER', '5000'], stdout=f)
-fpdbservice = subprocess.call([serco, 'qc', 'PAFPREP', '5000'], stdout=f)
-policyengineservice = subprocess.call([serco, 'qc', 'POLICYENGINE', '5000'], stdout=f)
-batchserverservice = subprocess.call([serco, 'qc', 'DSSBATCHSERVER', '5000'], stdout=f)
-messagebrokerservice = subprocess.call([serco, 'qc', 'DSSMESSAGEBROKER', '5000'], stdout=f)
-epserverservice = subprocess.call([serco, 'qc', 'EPSERVER', '5000'], stdout=f)
-workschedservice = subprocess.call([serco, 'qc', 'WORKSCHEDULER', '5000'], stdout=f)
-mgmtdservice = subprocess.call([serco, 'qc', 'MGMTD', '5000'], stdout=f)
-pgsqlservice = subprocess.call([serco, 'qc', 'PGSQLEIP', '5000'], stdout=f)
-eipproxyservice = subprocess.call([serco, 'qc', 'EIPMANAGERPROXY', '5000'], stdout=f)
-f.close
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'memory_cpu_hdd.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-SYSINFO = subprocess.call([wm, 'computersystem', 'Get', 'TotalPhysicalMemory', '/Value'], stdout=f)
-SYSINFO = subprocess.call([wm, 'cpu', 'Get', 'Name,', 'NumberOfCores,', 'NumberOfLogicalProcessors'], stdout=f)
-SYSINFO = subprocess.call([wm, 'logicaldisk', 'Get', 'Name,', 'Size,', 'Freespace'], stdout=f)
-f.close
-time.sleep(5)
-
-
-for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP_DIR, 'r'):
-    if 'TotalPhysicalMemory' in line:
-        print(line)
-
-
-for line in open('%s\\SVOS\\memory_cpu_hdd.txt' % TMP_DIR, 'r'):
-    if 'TotalPhysicalMemory' in line:
-        print(re.findall('\\d+', line))
-
-
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'RunningAntiVirus.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-command = 'wmic process get description | findstr -i "avgrsx avastsvc afwserv vsserv clamd nod32 fspex kavsvc mcshield pavsrv smc tmproxy"'
-p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-while True:
-    line = p.stdout.readline()
-    if line:
-        f.write(line)
-    else:
-        break
-
-
-DIR = '%s\\SVOS' % TMP_DIR
-File = 'GPO_Info.txt'
-FULL_PATH = os.path.join(DIR, File)
-f = open(FULL_PATH, 'w')
-gpresult = '%s\\System32\\gpresult' % SYS_ROOT
-SYSINFO = subprocess.call([gpresult, '/r'], stdout=f)
-f.close
-print('Thank you for running Forcepoint Support Assist.  \nA zip file can be found here: ' + USER_PROFILE_DIR + '\\Desktop\\.  \nPlease send this file to Forcepoint Support for review.')
-
-
 def main():
+    print('Creating ZIP file...')
     zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
 
 
@@ -609,3 +548,5 @@ def zipper(dir, zip_file):
 if __name__ == '__main__':
         main()
 shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
+
+print('\n\nZIP file was created here:\n\n   ' + FPARCHIVE + '  \n\nPlease send this file to Forcepoint Technical Support.')
