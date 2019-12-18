@@ -56,7 +56,6 @@ class enable_file_system_redirection:
         if self.success:
             self._revert(self.old_value)
 
-
 class Logger(object):
     def __init__(self, filename='Default.log'):
         self.terminal = sys.stdout
@@ -78,11 +77,12 @@ def get_eip_path():
                 result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
                 return result[0]
             except OSError:
-                exists = False
+                return False
             try:
                 hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
             except OSError:
                 print('Not a Triton Management Server')
+                return False
         elif major == 2:
             import _winreg
             #from _winreg import *
@@ -91,13 +91,25 @@ def get_eip_path():
                 result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
                 return result[0]
             except OSError:
-                exists = False
+                return False
             try:
                 hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
             except OSError:
                 print('Not a Triton Management Server')
+                return False
     except NotImplementedError:
         print('Unknown version of Python')
+
+def get_eip_version():
+    if os.path.exists(EIP_XML):
+        try:
+            tree = ET.parse(EIP_XML)
+            content = tree.getroot()
+            #Get EIP Version
+            eip_version = str(content.find('Infra_Version').text)
+            return eip_version
+        except:
+            print('ERROR: Unable to read EIPSettings.xml')
 
 def get_dss_version():
     try:
@@ -153,6 +165,83 @@ def fingerprint_repository_location():
     except NotImplementedError:
         print('Unknown version of Python')
 
+def get_sql_settings():
+    if os.path.exists(EIP_XML):
+        try:
+            tree = ET.parse(EIP_XML)
+            content = tree.getroot()
+            for LogDB in content.findall('LogDB'):
+                SQLSERVER = str(LogDB.find('Host').text)
+                SQLPORT = str(LogDB.find('Port').text)
+                SQLINSTANCE = str(LogDB.find('InstanceName').text.rstrip())
+            if SQLINSTANCE == 'None' or SQLINSTANCE == '':
+                SQLSERVER = SQLSERVER
+            else:
+                SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
+            db_settings = [SQLSERVER, SQLPORT]
+            return db_settings
+        except OSError:
+            print('ERROR: Unable to read EIPSettings.xml')
+            return False
+    else:
+        print('ERROR: Unable to locate EIPSettings.xml')
+        return False
+
+def run_sql_scripts(db_cursor):
+    sql_script_params = [
+        {"pa_config_props.csv": "SELECT * FROM PA_CONFIG_PROPERTIES"},
+        {"SQL_VERSION_AND_EDITION.csv": "SELECT @@version"},
+        {"DB_SIZE.csv": "SELECT DB_NAME(database_id) AS DatabaseName,Name AS Logical_Name,Physical_Name, (size*8)/1024 SizeMB FROM sys.master_files WHERE DB_NAME(database_id) = 'wbsn-data-security'"},
+        {"ws_sm_site_elements.csv": "SELECT * FROM WS_SM_SITE_ELEMENTS"},
+        {"LDAP_INFO.csv": "SELECT (select COUNT (*) from PA_REPO_GROUPS) + (select COUNT (*) from PA_REPO_USERS) + (select COUNT (*) from PA_REPO_COMPUTERS)"},
+        {"PA_EVENT_PARTITION_CATALOG.csv": "SELECT * from PA_EVENT_PARTITION_CATALOG"},
+        {"SyncedEPClients.csv": "SELECT pds.ID, pds.UPDATE_DATE, pds.[key] as Hostname from PA_DYNAMIC_STATUS pds Left outer join PA_DYNAMIC_STATUS_PROPS pdsp ON pds.ID = pdsp.DYNAMIC_STATUS_ID where pdsp.STR_VALUE = 'endpoint_status_is_synced' and pdsp.INT_VALUE = '1'"},
+        {"UnsyncCount.csv": "SELECT COUNT(*) as UnsyncCount from PA_DYNAMIC_STATUS_PROPS where STR_VALUE = 'endpoint_status_is_synced' and INT_VALUE = '0'"},
+        {"PA_EVENT_ARCHIVE_CONF.csv": "SELECT * from PA_EVENT_ARCHIVE_CONF"},
+        {"WS_ENDPNT_PROFILES.csv": "SELECT * from WS_ENDPNT_PROFILES"},
+        {"WS_ENDPNT_PROFILE_SERVERS.csv": "SELECT * from WS_ENDPNT_PROFILE_SERVERS"},
+        {"EP_Profiles_With_AP-DATA_Server.csv": "select NAME from WS_ENDPNT_PROFILES where ID in (select EP_PROFILE_ID from WS_ENDPNT_PROFILE_SERVERS where EP_SERVER_ID in (select ID from WS_SM_SITE_ELEMENTS where DISCRIMINATOR = 'ENDPOINT_SRV' and HOSTNAME in (select HOSTNAME from WS_SM_SITE_ELEMENTS where DISCRIMINATOR = 'CNTNT_MNG_SRV')))"},
+        {"Audsyslogs.csv": "select ID, SEVERITY, STATUS, GENERATION_TIME_TS, SOURCE_NAME, SOURCE_SUB_TYPE, [MESSAGE] from PA_LOGGING select ID, GENERATION_TIME_TS, ADMIN_NAME, ROLE_NAME,[MESSAGE] from PA_AUDIT_INFO WHERE IS_LEADER_FOR_TX = 1"},
+        {"PARTITIONS.csv": "select PARTITION_INDEX, FROM_DATE, TO_DATE, STATUS from PA_EVENT_PARTITION_CATALOG"},
+        {"POLICIES.csv": "select NAME, DEFINITION_TYPE from WS_PLC_POLICIES where IS_ENABLED = '1'"},
+        {"CRAWLER_TASKS.csv": "SELECT (select COUNT (*) from WS_PLC_CC_FILE_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_DB_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_MACHINE_LEARNING) + (select COUNT (*) from WS_PLC_DISCOVERY_TASKS)"},
+        {"UNHOOKED_APPS.csv": "select STR_VALUE from WS_ENDPNT_GLOB_CONFIG_PROPS where NAME = 'generalExcludedApplications'"}
+    ]
+    DIR = '%s\\SVOS' % TMP_DIR
+    print('Running SQL scripts ...')
+    try:
+        for param in sql_script_params:
+            for file_name, query_string in param.items():
+                file_path = os.path.join(DIR, file_name)
+                db_cursor.execute(query_string)
+                query_results = db_cursor.fetchall()
+                with open(file_path, 'wb') as output_file:
+                    for row in query_results:
+                        output_file.write('%s\n' % str(row))
+                output_file.close
+        print('Completed SQL scripts.')
+    except IOError:
+        print('ERROR: Unable to run SQL scripts.')
+
+def msinfo32(output):
+    try:
+        output_file = output + "/Windows/msinfo32.nfo"
+        cmd = "msinfo32 /nfo " + output_file
+        print('Command: ' + cmd)
+        subprocess.call(cmd)
+    except:
+        print('Cannot run MSInfo32!')
+
+def check_dlp_debugging():
+    DSS_CONF = DSS_DIR + '/conf/'
+    for filename in os.listdir(DSS_CONF):
+        with open(DSS_CONF + filename) as currentfile:
+            text = currentfile.read()
+            if 'DEBUG' in text or 'debug' in text:
+                #print(filename + ' ' + ' in debug mode')
+                with open(SVOS_DIR + 'debug_enabled.txt', 'a+') as f:
+                    f.write(filename + ' has debugging enabled\n')
+
 def copy_data(src,dst):
     try:
         if os.path.isdir(src):
@@ -184,12 +273,11 @@ def run_command(cmd,dst):
 def load_json_config():
     #Look for custom JSON settings
     if os.path.isfile('custom.json'):
-         print('\nUsing custom JSON configuration.')
+         print('\nWARN: Using custom JSON configuration.')
          custom_file = 'custom.json'
          with open(custom_file) as f:
             return json.loads(f.read())
     else:
-         print('\nUsing default JSON configuration.')
          return json.loads(collect_me)
          
 def parse_json_config():
@@ -221,6 +309,7 @@ def parse_json_config():
                 copy_data(src_path,dst_path)
         if category == "COMMANDS":
             print('\n===== Windows Commands =====')
+            msinfo32(SVOS_DIR)
             for item in data_set[category]:
                 dst_path = SVOS_DIR + item['output']
                 # if not os.path.exists(dst_path):
@@ -228,6 +317,74 @@ def parse_json_config():
                 cmd = item['command']
                 run_command(cmd,dst_path)
 
+def search_in_file(phrase, file):
+    searchfile = open(file, 'r')
+    for line in searchfile:
+        if phrase in line:
+            return line
+
+def decrypt_cluster_keys():
+    if os.path.isfile(CATPROP):
+        catdawg = search_in_file('wbsn', CATPROP)
+        cat = catdawg.replace('wbsn.com.pa.crypto.crypto.PAISCryptorV2.key=', '')
+        cat1 = cat.split(':')
+        cat2 = cat1[2] + ' ' + cat1[0] + ' ' + cat1[1]
+        cat3 = cat2.replace('\n', ' ')
+        os.chdir(DSS_DIR)
+        command = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + cat3
+        print('Catalina.properties: ')
+        subprocess.call(command)
+
+    if os.path.exists(DSS_DIR):
+        cacert = search_in_file('{4;', DSS_DIR + 'ca.cer')
+        command = 'cryptotool -k 4 -d -t' + ' ' + cacert
+        print('ca.cer: ')
+        subprocess.call(command)
+
+    if os.path.exists(KEYS):
+        os.chdir(KEYS)
+        command = 'cryptotool -k 2 -g'
+        print('epcluster.key: ')
+        subprocess.call(command)
+
+    if os.path.isfile(JETTYXML):
+        jettydawg = search_in_file('wsjf', JETTYXML)
+        j1 = re.sub('<[^>]*>', '', jettydawg)
+        j2 = j1.replace('\n', '')
+        j3 = j2.replace(' ', '')
+        j4 = j3.split(':')
+        j5 = j4[2] + ' ' + j4[0] + ' ' + j4[1]
+        os.chdir(DSS_DIR)
+        command = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + j5
+        print('jetty.xml :')
+        subprocess.call(command)
+
+def zipper(dir, zip_file):
+    zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    root_len = len(os.path.abspath(dir))
+    for root, dirs, files in os.walk(dir):
+        archive_root = os.path.abspath(root)[root_len:]
+        for f in files:
+            fullpath = os.path.join(root, f)
+            archive_name = os.path.join(archive_root, f)
+            zip.write(fullpath, archive_name, zipfile.ZIP_DEFLATED)
+    zip.close()
+    return zip_file
+
+def human_size(input_bytes, units=[' bytes','KB','MB','GB','TB', 'PB', 'EB']):
+    """ Returns a human readable string reprentation of bytes.
+    
+    Args:
+        input_bytes (int): Raw bytes to be calculated.
+        units (:obj:'list' of :obj:'str', optional): List of human readable byte size formats. Defaults to predefined list.
+    
+    Returns:
+        String representing human readable byte size format.
+
+    Example:
+        "2048 MB"
+    """
+    return str(input_bytes) + units[0] if input_bytes < 1024 else human_size(input_bytes>>10, units[1:])
 
 TMP_DIR = os.getenv('TMP', 'NONE')
 SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
@@ -243,6 +400,9 @@ JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
 HOST_NAME = socket.gethostname() #HOSTNAME
 FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
 DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
+CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
+KEYS = '%s\\keys\\' % DSS_DIR
+JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
 
 collect_me = '''
 {
@@ -253,36 +413,52 @@ collect_me = '''
     {"source": "/logs/", "destination": "/EIP/logs/"}
   ],
   "DSS": [
-    {"source": "/Logs/", "destination": "/DSS/Logs"},
-    {"source": "/ResourceResolver/ResourceResolverServerMaster.db", "destination": "/DSS/ResourceResolver/"},
-    {"source": "/tomcat/conf/Catalina/localhost/dlp.xml", "destination": "/DSS/tomcat/"},
-    {"source": "/tomcat/conf/catalina.properties", "destination": "/DSS/tomcat/"},
-    {"source": "/tomcat/logs/", "destination": "/DSS/tomcat/"},
+    {"source": "/apache/logs/", "destination": "/DSS/apache/"},
     {"source": "/apache/conf/httpd.conf", "destination": "/DSS/apache/"},
     {"source": "/apache/conf/extra/httpd-ssl.conf", "destination": "/DSS/apache/"},
-    {"source": "/apache/logs/", "destination": "/DSS/apache/"},
-    {"source": "/keys/ep_cluster.key", "destination": "/DSS/keys/"},
-    {"source": "/keys/machine.key", "destination": "/DSS/keys/"},
+    {"source": "/conf/", "destination": "/DSS/conf/"},
     {"source": "/ConfigurationStore/", "destination": "/DSS/ConfigurationStore/"},
-    {"source": "/Data-Batch-Server/service-container/container/logs/service_logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/logs/", "destination": "/DSS/Data-Batch-Server/"},
     {"source": "/Data-Batch-Server/service-container/container/logs/", "destination": "/DSS/Data-Batch-Server/"},
     {"source": "/Data-Batch-Server//service-container/container/etc/jetty.xml", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "EndPointServer.config.xml", "destination": "/DSS/"},
-    {"source": "/ca.cer", "destination": "/DSS/"},
-    {"source": "/conf/", "destination": "/DSS/conf/"},
-    {"source": "/extractor.config.xml", "destination": "/DSS/"},
+    {"source": "/Data-Batch-Server/service-container/container/logs/service_logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/service-container/container/webapps/data-batch-services.xml", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/EPS_CAMEL/data/service_logs/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/keystore/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/logs/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/application.properties", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/camel.log", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/log4j2.xml", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/ResourceResolver/ResourceResolverServerMaster.db", "destination": "/DSS/ResourceResolver/"},
+    {"source": "/tomcat/logs/", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/conf/catalina.properties", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/conf/Catalina/localhost/dlp.xml", "destination": "/DSS/tomcat/"},
+    {"source": "/keys/", "destination": "/DSS/keys/"},
+    {"source": "/Logs/", "destination": "/DSS/Logs"},
     {"source": "/mediator/logs/mediator.out", "destination": "/DSS/mediator/"},
-    {"source": "/Data-Batch-Server/logs/", "destination": "/DSS/Data-Batch-Server/"},
     {"source": "/MessageBroker/data/activemq.log", "destination": "/DSS/MessageBroker/"},
     {"source": "/MessageBroker/data/audit.log", "destination": "/DSS/MessageBroker/"},
     {"source": "/MessageBroker/data/service_logs/", "destination": "/DSS/MessageBroker/"},
-    {"source": "/OCRServer.config.xml", "destination": "/DSS/"},
+    {"source": "/allcerts.cer", "destination": "/DSS/"},
+    {"source": "/ca.cer", "destination": "/DSS/"},
+    {"source": "/host.cer", "destination": "/DSS/"},
+    {"source": "/host.key", "destination": "/DSS/"},
+    {"source": "/HostCert.key", "destination": "/DSS/"},
     {"source": "/FileEncryptor.log", "destination": "/DSS/"},
+    {"source": "/canonizer.config.xml", "destination": "/DSS/"},
+    {"source": "/EndPointServer.config.xml", "destination": "/DSS/"},
+    {"source": "/extractor.config.xml", "destination": "/DSS/"},
+    {"source": "/extractorlinux.config.xml", "destination": "/DSS/"},
+    {"source": "/FingerprintRepositoryStatistics.xml", "destination": "/DSS/"},
+    {"source": "/FPR.config.xml", "destination": "/DSS/"},
+    {"source": "/mgmtd.config.xml", "destination": "/DSS/"},
+    {"source": "/mng-repo.xml", "destination": "/DSS/"},
+    {"source": "/OCRServer.config.xml", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.config.xml", "destination": "/DSS/"},
     {"source": "/PolicyEngine.policy.xml", "destination": "/DSS/"},
     {"source": "/PolicyEngine.policy.xml.bak", "destination": "/DSS/"},
-    {"source": "/allcerts.cer", "destination": "/DSS/"},
-    {"source": "/HostCert.key", "destination": "/DSS/"},
-    {"source": "/Data-Batch-Server/service-container/container/webapps/data-batch-services.xml", "destination": "/DSS/Data-Batch-Server/"}
+    {"source": "/PolicyEngineStatistics.xml", "destination": "/DSS/"},
+    {"source": "/ServerCapabilities.xml", "destination": "/DSS/"}
   ],
   "WINDOWS": [
     {"source": "C:/Windows/System32/winevt/Logs/Application.evtx", "destination": "/Windows/"},
@@ -290,7 +466,7 @@ collect_me = '''
   ],
   "COMMANDS": [
     {"command": "systeminfo", "output": "/Windows/systeminfo.txt"},
-    {"command": "gpresult /r", "output": "/Windows/gpresult.txt"},
+    {"command": "gpresult /R /Z", "output": "/Windows/gpresult.txt"},
     {"command": "netstat -abno", "output": "/Windows/netstat.txt"},
     {"command": "sc qc DSSMANAGER 5000", "output": "/Windows/services.txt"},
     {"command": "sc qc EIPMANAGER 5000", "output": "/Windows/services.txt"},
@@ -307,8 +483,7 @@ collect_me = '''
     {"command": "wmic os get DataExecutionPrevention_SupportPolicy", "output": "/Windows/DEP.txt"},
     {"command": "wmic computersystem get TotalPhysicalMemory /Value", "output": "/Windows/memory.txt"},
     {"command": "wmic cpu get Name, NumberOfCores, NumberOfLogicalProcessors", "output": "/Windows/cpu.txt"},
-    {"command": "wmic logicaldisk Get Name, Size, Freespace", "output": "/Windows/hdd.txt"},
-    {"command": "wmic process get", "output": "/Windows/antivirus.txt"}
+    {"command": "wmic logicaldisk Get Name, Size, Freespace", "output": "/Windows/hdd.txt"}
   ]
 }
 '''
@@ -322,231 +497,90 @@ else:
 
 sys.stdout = Logger(DEBUG_LOG)
 
-print('\nForcepoint Support Assist v0.4.0')
+print(r'  ___ ___  ___  ___ ___ ___  ___ ___ _  _ _____ ')
+print(r' | __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
+print(r' | _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
+print(r' |_| \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
+print('                                                ')
+print('       Forcepoint Support Assist v0.5.0\n')
 
+print('\nProducts detected: ')
 if DSS_DIR == 'NONE':
     servicemanager.LogInfoMsg('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
     print('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
     sys.exit()
 else:
-    print('\nForcepoint DLP verion: ' + str(get_dss_version()))
+    print(' * Forcepoint DLP version: ' + str(get_dss_version()))
 
-# print('Fingerprint Repository location')
-# print(fingerprint_repository_location())
+if EIP_DIR == 'NONE':
+    print('This system is not a Forcepoint Security Manager.')
+else:
+    print(' * Forcepoint Security Manager: ' + str(get_eip_version()))
+    db_host = get_sql_settings()
 
-#Start log collection
+print('\nStarting log collection ...')
 parse_json_config()
 
-if os.path.exists(EIP_XML):
+if db_host:
     try:
-        tree = ET.parse(EIP_XML)
-        content = tree.getroot()
-        #Get SQL datase info
-        for LogDB in content.findall('LogDB'):
-            SQLSERVER = str(LogDB.find('Host').text)
-            SQLPORT = str(LogDB.find('Port').text)
-            SQLINSTANCE = str(LogDB.find('InstanceName').text.rstrip())
-        if SQLINSTANCE == 'None' or SQLINSTANCE == '':
-            SQLSERVER = SQLSERVER
-        else:
-            SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
-        print('SQLSERVER is: ' + SQLSERVER)
-        print('SQLINSTANCE is: "' + SQLINSTANCE + '"')
-        print('SQLPORT is: ' + SQLPORT)
-    except OSError:
-        print('ERROR: Unable to read EIPSettings.xml')
-else:
-    print('ERROR: Unable to locate EIPSettings.xml')
-
-def log_system_details():
-    FULL_PATH = os.path.join(SVOS_DIR, 'System_Variables.txt')
-    f = open(FULL_PATH, 'w')
-    try:
-        f.writelines('HOSTNAME:' + HOST_NAME + '\n')
-        f.writelines('DSS_HOME:' + DSS_DIR + '\n')
-        f.writelines('PYTHONPATH:' + PYTHON_DIR + '\n')
-        f.writelines('JETTY_HOME:' + JETTY_DIR + '\n')
-        f.writelines('JRE_HOME:' + JRE_DIR + '\n')
-        f.writelines('ACTIVEMQ_HOME:' + AMQ_DIR + '\n')
-        if EIP_DIR != 'NONE':
-            f.writelines('SQL Server IP:' + SQLSERVER + '\n')
-            if os.path.exists(EIP_XML):
-                tree = ET.parse(EIP_XML)
-                content = tree.getroot()
-                for InstalledComponents in content.findall('InstalledComponents'):
-                    MANAGERS = str(InstalledComponents.find('Managers').text)
-                    f.writelines('Managers Installed: ' + MANAGERS + '\n')
-    finally:
-        f.close
-
-def run_sql_scripts(db_cursor):
-    sql_script_params = [
-        {"pa_config_props.csv": "SELECT * FROM PA_CONFIG_PROPERTIES"},
-        {"SQL_VERSION_AND_EDITION.csv": "SELECT @@version"},
-        {"DB_SIZE.csv": "SELECT DB_NAME(database_id) AS DatabaseName,Name AS Logical_Name,Physical_Name, (size*8)/1024 SizeMB FROM sys.master_files WHERE DB_NAME(database_id) = 'wbsn-data-security'"},
-        {"ws_sm_site_elements.csv": "SELECT * FROM WS_SM_SITE_ELEMENTS"},
-        {"LDAP_INFO.csv": "SELECT (select COUNT (*) from PA_REPO_GROUPS) + (select COUNT (*) from PA_REPO_USERS) + (select COUNT (*) from PA_REPO_COMPUTERS)"},
-        {"PA_EVENT_PARTITION_CATALOG.csv": "SELECT * from PA_EVENT_PARTITION_CATALOG"},
-        {"SyncedEPClients.csv": "SELECT pds.ID, pds.UPDATE_DATE, pds.[key] as Hostname from PA_DYNAMIC_STATUS pds Left outer join PA_DYNAMIC_STATUS_PROPS pdsp ON pds.ID = pdsp.DYNAMIC_STATUS_ID where pdsp.STR_VALUE = 'endpoint_status_is_synced' and pdsp.INT_VALUE = '1'"},
-        {"UnsyncCount.csv": "SELECT COUNT(*) as UnsyncCount from PA_DYNAMIC_STATUS_PROPS where STR_VALUE = 'endpoint_status_is_synced' and INT_VALUE = '0'"},
-        {"PA_EVENT_ARCHIVE_CONF.csv": "SELECT * from PA_EVENT_ARCHIVE_CONF"},
-        {"WS_ENDPNT_PROFILES.csv": "SELECT * from WS_ENDPNT_PROFILES"},
-        {"WS_ENDPNT_PROFILE_SERVERS.csv": "SELECT * from WS_ENDPNT_PROFILE_SERVERS"},
-        {"EP_Profiles_With_AP-DATA_Server.csv": "select NAME from WS_ENDPNT_PROFILES where ID in (select EP_PROFILE_ID from WS_ENDPNT_PROFILE_SERVERS where EP_SERVER_ID in (select ID from WS_SM_SITE_ELEMENTS where DISCRIMINATOR = 'ENDPOINT_SRV' and HOSTNAME in (select HOSTNAME from WS_SM_SITE_ELEMENTS where DISCRIMINATOR = 'CNTNT_MNG_SRV')))"},
-        {"Audsyslogs.csv": "select ID, SEVERITY, STATUS, GENERATION_TIME_TS, SOURCE_NAME, SOURCE_SUB_TYPE, [MESSAGE] from PA_LOGGING select ID, GENERATION_TIME_TS, ADMIN_NAME, ROLE_NAME,[MESSAGE] from PA_AUDIT_INFO WHERE IS_LEADER_FOR_TX = 1"},
-        {"PARTITIONS.csv": "select PARTITION_INDEX, FROM_DATE, TO_DATE, STATUS from PA_EVENT_PARTITION_CATALOG"},
-        {"POLICIES.csv": "select NAME, DEFINITION_TYPE from WS_PLC_POLICIES where IS_ENABLED = '1'"},
-        {"CRAWLER_TASKS.csv": "SELECT (select COUNT (*) from WS_PLC_CC_FILE_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_DB_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_MACHINE_LEARNING) + (select COUNT (*) from WS_PLC_DISCOVERY_TASKS)"},
-        {"UNHOOKED_APPS.csv": "select STR_VALUE from WS_ENDPNT_GLOB_CONFIG_PROPS where NAME = 'generalExcludedApplications'"}
-    ]
-    DIR = '%s\\SVOS' % TMP_DIR
-    print('Running SQL scripts...')
-    try:
-        for param in sql_script_params:
-            for file_name, query_string in param.items():
-                file_path = os.path.join(DIR, file_name)
-                db_cursor.execute(query_string)
-                query_results = db_cursor.fetchall()
-                with open(file_path, 'wb') as output_file:
-                    for row in query_results:
-                        output_file.write('%s\n' % str(row))
-                output_file.close
-    except IOError:
-        print('ERROR: Unable to run SQL scripts.')
-
-try:
-    print('Connecting to database using Windows Authentication for current user "' + win32api.GetUserName() + '"')
-    conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (SQLSERVER))
-    cursor = conn.cursor()
-    print('Connected to database.')
-    windows_auth = True
-    run_sql_scripts(cursor)
-except:
-    print('ERROR: Could not establish connection to database via Windows Authentication for current user "' + win32api.GetUserName() + '"')
-    windows_auth = False
-
-if windows_auth == False:
-    try:
-        print('Trying SQL Authentication. Please enter valid SQL database credentials.')
-        try:
-            py_version = platform.python_version()
-            major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-            if major == 3:
-                #python 3.x implementation
-                user = input('Username: ')
-            elif major == 2:
-                #python 2.x implementation
-                user = raw_input('Username: ')
-        except NotImplementedError:
-            print('Unknown version of Python')
-        passwd = getpass.getpass('Password: ')
-        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (SQLSERVER, user, passwd))
+        print('\n===== SQL Database =====')
+        print('SQL Server Host: ' + db_host[0])
+        print('SQL Server Port: ' + db_host[1])
+        print('Current Windows user: "' + win32api.GetUserName() + '"')
+        print('Connecting to database using Windows Authentication')
+        conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (db_host[0]))
         cursor = conn.cursor()
-        print('Connected to database.')
+        print('Successfully connected to database.')
+        windows_auth = True
         run_sql_scripts(cursor)
-        conn.close()
-    except IOError:
-        print('ERROR: Could not establish connection to database via SQL Authentication for user "' + user + '"')
+    except pyodbc.Error:
+        print(pyodbc.Error)
+    except:
+        print('ERROR: Could not establish connection to database via Windows Authentication for current user "' + win32api.GetUserName() + '"')
+        windows_auth = False
+elif EIP_DIR:
+    if windows_auth == False:
+        try:
+            print('Trying SQL Authentication. Please enter valid SQL database credentials.')
+            try:
+                py_version = platform.python_version()
+                major, minor, patch = [int(x, 10) for x in py_version.split('.')]
+                if major == 3:
+                    #python 3.x implementation
+                    user = input('Username: ')
+                elif major == 2:
+                    #python 2.x implementation
+                    user = raw_input('Username: ')
+            except NotImplementedError:
+                print('Unknown version of Python')
+            passwd = getpass.getpass('Password: ')
+            conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
+            cursor = conn.cursor()
+            print('\n Successfully connected to database.')
+            run_sql_scripts(cursor)
+            conn.close()
+        except pyodbc.Error:
+            print(pyodbc.Error)
+        except IOError:
+            print('ERROR: Could not establish connection to database via SQL Authentication for user "' + user + '"')
 
-enable_file_system_redirection().__enter__()
+check_dlp_debugging()
 
-def get_msinfo32():
-    print('\nGathering OS info.  This may take a few minutes.  Please be patient.')
-    msinfo_cmd = '%s\\System32\\msinfo32' % SYS_ROOT
-    msinfo_out = '%s\\SVOS\\msinfo32.txt' % TMP_DIR
-    subprocess.call([msinfo_cmd, '/report', msinfo_out])
-
-def check_dlp_debugging():
-    DSS_CONF = DSS_DIR + '/conf'
-    for filename in os.listdir(DSS_CONF):
-        with open(DSS_CONF + filename) as currentfile:
-            text = currentfile.read()
-            if 'DEBUG' in text or 'debug' in text:
-                print(filename + ' ' + ' in debug mode')
-
-
-CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
-if os.path.isfile(CATPROP):
-    print('The following are the cluster keys from Catalina.Properties: ca.cer, ep_cluster.key, and jetty.xml, in that order')
-    
-    def catprop():
-        searchfile = open(CATPROP, 'r')
-        for line in searchfile:
-            if 'wbsn' in line:
-                return line
-    catdawg = catprop()
-    cat = catdawg.replace('wbsn.com.pa.crypto.crypto.PAISCryptorV2.key=', '')
-    cat1 = cat.split(':')
-    cat2 = cat1[2] + ' ' + cat1[0] + ' ' + cat1[1]
-    cat3 = cat2.replace('\n', ' ')
-    os.chdir(DSS_DIR)
-    cmd2 = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + cat3
-    CONVERTPW2 = os.popen(cmd2).read()
-    print('catalina properties')
-    print(CONVERTPW2)
-    
-    def ca():
-        CACER = '%s\\ca.cer' % DSS_DIR
-        search = open(CACER, 'r')
-        for line in search:
-            if line.startswith('{4;'):
-                return line
-    cacert = ca()
-    ctool = 'cryptotool -k 4 -d -t' + ' ' + cacert
-    CONVERT3 = os.popen(ctool).read()
-    print('ca.cer')
-    print(CONVERT3)
-    KEYS = '%s\\keys\\' % DSS_DIR
-    os.chdir(KEYS)
-    ctool2 = 'cryptotool -k 2 -g'
-    CONVERT4 = os.popen(ctool2).read()
-    print('epcluster.key')
-    print(CONVERT4)
-else:
-    print('Not a Triton Management Server, moving on')
-
-
-JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
-if os.path.isfile(JETTYXML):
-    def jettyprop():
-        searchfile = open(JETTYXML, 'r')
-        for line in searchfile:
-            if 'wsjf' in line:
-                return line
-    jettydawg = jettyprop()
-    j1 = re.sub('<[^>]*>', '', jettydawg)
-    j2 = j1.replace('\n', '')
-    j3 = j2.replace(' ', '')
-    j4 = j3.split(':')
-    j5 = j4[2] + ' ' + j4[0] + ' ' + j4[1]
-    os.chdir(DSS_DIR)
-    jettycmd = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + j5
-    CONVERTPW3 = os.popen(jettycmd).read()
-    print('jetty.xml')
-    print(CONVERTPW3)
-else:
-    print('Not a Triton manager or version is below 8.1')
+#decrypt_cluster_keys()
 
 def main():
-    print('Creating ZIP file...')
+    print('\nCreating ZIP file ...')
     zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
-
-
-def zipper(dir, zip_file):
-    zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
-    root_len = len(os.path.abspath(dir))
-    for root, dirs, files in os.walk(dir):
-        archive_root = os.path.abspath(root)[root_len:]
-        for f in files:
-            fullpath = os.path.join(root, f)
-            archive_name = os.path.join(archive_root, f)
-            zip.write(fullpath, archive_name, zipfile.ZIP_DEFLATED)
-    zip.close()
-    return zip_file
-
 
 if __name__ == '__main__':
         main()
-shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
 
-print('\n\nZIP file was created here:\n\n   ' + FPARCHIVE + '  \n\nPlease send this file to Forcepoint Technical Support.')
+shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
+fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
+
+print('\n\nZIP file details: ')
+print(' * Path: ' + FPARCHIVE)
+print(' * Size: ' + fp_archive_size)
+print('\nPlease send this file to Forcepoint Technical Support.')
+
+enable_file_system_redirection().__enter__()
