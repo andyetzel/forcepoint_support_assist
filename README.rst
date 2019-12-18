@@ -46,7 +46,13 @@ Releases
     Added debug logging capability
 
 * v0.4.0
-    Refactored code, streamlined logic for subprocess calls
+    Refactored logic for multiple subprocess calls
+
+* v0.5.0
+    Refactored decrypt cluster keys
+    Added Forcepoint Banner
+    Changed some output verbiage
+
 
 Credits
 -------
