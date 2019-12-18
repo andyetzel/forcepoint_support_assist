@@ -50,6 +50,8 @@ Releases
 
 * v0.5.0
     Refactored decrypt cluster keys
+    Added Forcepoint Banner
+    Changed some output verbiage
 
 
 Credits
