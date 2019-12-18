@@ -53,6 +53,9 @@ Releases
     Added Forcepoint Banner
     Changed some output verbiage
 
+* v0.5.1
+    Fixed NameError for non-existent EIPSettings.xml when running on supplemental DLP server
+    Fixed TypeError for bad variable type concatenation when running on supplemental DLP server
 
 Credits
 -------

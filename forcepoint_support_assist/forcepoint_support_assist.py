@@ -101,15 +101,18 @@ def get_eip_path():
         print('Unknown version of Python')
 
 def get_eip_version():
-    if os.path.exists(EIP_XML):
-        try:
-            tree = ET.parse(EIP_XML)
-            content = tree.getroot()
-            #Get EIP Version
-            eip_version = str(content.find('Infra_Version').text)
-            return eip_version
-        except:
-            print('ERROR: Unable to read EIPSettings.xml')
+	try:
+		if os.path.exists(EIP_XML):
+			try:
+				tree = ET.parse(EIP_XML)
+				content = tree.getroot()
+				#Get EIP Version
+				eip_version = str(content.find('Infra_Version').text)
+				return eip_version
+			except:
+				print('ERROR: Unable to read EIPSettings.xml')
+	except NameError:
+		pass
 
 def get_dss_version():
     try:
@@ -166,26 +169,29 @@ def fingerprint_repository_location():
         print('Unknown version of Python')
 
 def get_sql_settings():
-    if os.path.exists(EIP_XML):
-        try:
-            tree = ET.parse(EIP_XML)
-            content = tree.getroot()
-            for LogDB in content.findall('LogDB'):
-                SQLSERVER = str(LogDB.find('Host').text)
-                SQLPORT = str(LogDB.find('Port').text)
-                SQLINSTANCE = str(LogDB.find('InstanceName').text.rstrip())
-            if SQLINSTANCE == 'None' or SQLINSTANCE == '':
-                SQLSERVER = SQLSERVER
-            else:
-                SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
-            db_settings = [SQLSERVER, SQLPORT]
-            return db_settings
-        except OSError:
-            print('ERROR: Unable to read EIPSettings.xml')
-            return False
-    else:
-        print('ERROR: Unable to locate EIPSettings.xml')
-        return False
+	try:
+		if os.path.exists(EIP_XML):
+			try:
+				tree = ET.parse(EIP_XML)
+				content = tree.getroot()
+				for LogDB in content.findall('LogDB'):
+					SQLSERVER = str(LogDB.find('Host').text)
+					SQLPORT = str(LogDB.find('Port').text)
+					SQLINSTANCE = str(LogDB.find('InstanceName').text.rstrip())
+				if SQLINSTANCE == 'None' or SQLINSTANCE == '':
+					SQLSERVER = SQLSERVER
+				else:
+					SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
+				db_settings = [SQLSERVER, SQLPORT]
+				return db_settings
+			except OSError:
+				print('ERROR: Unable to read EIPSettings.xml')
+				return False
+		else:
+			print('ERROR: Unable to locate EIPSettings.xml')
+			return False
+	except NameError:
+		return False
 
 def run_sql_scripts(db_cursor):
     sql_script_params = [
@@ -284,13 +290,16 @@ def parse_json_config():
     data_set = load_json_config()
     for category in data_set:
         if category == "EIP":
-            print('\n===== EIP logs =====')
-            for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
-                if not os.path.exists(dst_path):
-                    os.makedirs(dst_path)
-                src_path = EIP_DIR + item['source']
-                copy_data(src_path,dst_path)
+            if EIP_DIR:
+                print('\n===== EIP logs =====')
+                for item in data_set[category]:
+                    dst_path = SVOS_DIR + item['destination']
+                    if not os.path.exists(dst_path):
+                        os.makedirs(dst_path)
+                    src_path = EIP_DIR + item['source']
+                    copy_data(src_path,dst_path)
+            else:
+                print('Not a Forcepoint Security Manager.')
         if category == "DSS":
             print('\n===== DSS logs =====')
             for item in data_set[category]:
@@ -391,7 +400,8 @@ SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
 USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
 EIP_DIR = get_eip_path()
-EIP_XML = EIP_DIR + "/EIPSettings.xml"
+if EIP_DIR:
+	EIP_XML = EIP_DIR + "/EIPSettings.xml"
 DSS_DIR = os.getenv('DSS_HOME', 'NONE')
 JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
 PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
@@ -502,7 +512,7 @@ print(r' | __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
 print(r' | _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
 print(r' |_| \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
 print('                                                ')
-print('       Forcepoint Support Assist v0.5.0\n')
+print('       Forcepoint Support Assist v0.5.1\n')
 
 print('\nProducts detected: ')
 if DSS_DIR == 'NONE':
