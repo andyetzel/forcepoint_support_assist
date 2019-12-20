@@ -26,36 +26,40 @@ Releases
 --------
 
 * v0.1.0
-    Initial release
+    - Initial alpha release
 
 * v0.1.1
-    Fixed an issue causing script to exit prematurely due to permission issue with DSS apache logs.
+    - Fixed an issue causing script to exit prematurely due to permission issue with DSS apache logs
 
 * v0.1.2
-    Fixed IndexError when parsing EIPSettings.xml due to changes introduced in EIP v8.5.2.
+    - Fixed IndexError when parsing EIPSettings.xml due to changes introduced in EIP v8.5.2
 
 * v0.1.3
-    Added Python 3.x compatibility for changes in v0.1.2 release.
-    Fixed typos in output.
-    Updated documentation.
+    - Added Python 3.x compatibility for changes in v0.1.2 release
+    - Fixed typos in output
+    - Updated documentation
 
 * v0.2.0
-    Refactored code for readability and maintainability
+    - Refactored code for readability and maintainability
 
 * v0.3.0
-    Added debug logging capability
+    - Added debug logging capability
 
 * v0.4.0
-    Refactored logic for multiple subprocess calls
+    - Refactored logic for multiple subprocess calls
 
 * v0.5.0
-    Refactored decrypt cluster keys
-    Added Forcepoint Banner
-    Changed some output verbiage
+    - Refactored decrypt cluster keys
+    - Added Forcepoint Banner
+    - Changed some output verbiage
 
 * v0.5.1
-    Fixed NameError for non-existent EIPSettings.xml when running on supplemental DLP server
-    Fixed TypeError for bad variable type concatenation when running on supplemental DLP server
+    - Fixed NameError for non-existent EIPSettings.xml when running on supplemental DLP server
+    - Fixed TypeError for bad variable type concatenation when running on supplemental DLP server
+
+* v0.6.0
+    - Added advanced logging capability
+    - Fixed multiple issues for some uncaught exceptions
 
 Credits
 -------
