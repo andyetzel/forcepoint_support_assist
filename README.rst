@@ -57,6 +57,10 @@ Releases
     Fixed NameError for non-existent EIPSettings.xml when running on supplemental DLP server
     Fixed TypeError for bad variable type concatenation when running on supplemental DLP server
 
+* v0.6.0
+    Added advanced logging capability
+    Fixed multiple issues for some uncaught exceptions
+
 Credits
 -------
 
