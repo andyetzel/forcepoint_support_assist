@@ -61,6 +61,9 @@ Releases
     - Added advanced logging capability
     - Fixed multiple issues for some uncaught exceptions
 
+* v0.6.1
+    - Fixed WindowsError when running on supplemental DLP server
+
 Credits
 -------
 
