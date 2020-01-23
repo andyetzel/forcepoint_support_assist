@@ -561,4 +561,3 @@ def human_size(input_bytes, units=[' bytes','KB','MB','GB','TB', 'PB', 'EB']):
 
 if __name__ == '__main__':
         main()
-
