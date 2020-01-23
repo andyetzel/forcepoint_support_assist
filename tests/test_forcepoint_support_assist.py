@@ -22,3 +22,8 @@ def test_content(response):
     """Sample pytest test function with the pytest fixture as an argument."""
     # from bs4 import BeautifulSoup
     # assert 'GitHub' in BeautifulSoup(response.content).title.string
+
+def test_get_eip_path():
+    # test that exception is raised correctly when not running either Python 2.x or Python 3.x
+    with pytest.raises(NotImplementedError):
+        major = 1
