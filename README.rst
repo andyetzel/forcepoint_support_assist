@@ -64,6 +64,9 @@ Releases
 * v0.6.1
     - Fixed WindowsError when running on supplemental DLP server
 
+* v0.7.0
+    - Refactored code for readability and maintainability
+
 Credits
 -------
 
