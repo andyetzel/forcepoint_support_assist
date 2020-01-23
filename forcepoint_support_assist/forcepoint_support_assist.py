@@ -230,10 +230,8 @@ def main():
     print('\n')
     logging.info('Creating ZIP file ...')
     zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
-
     shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
     fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
-
     print('\n')
     logging.info('ZIP file details: ')
     logging.info(' * Path: ' + FPARCHIVE)
