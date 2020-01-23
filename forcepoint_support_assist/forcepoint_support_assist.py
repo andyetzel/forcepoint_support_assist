@@ -29,6 +29,11 @@ try:
 except ImportError:
     import simplejson as json 
 
+try:
+    import winreg
+except ImportError:
+    import _winreg as winreg
+
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
     _revert = ctypes.windll.kernel32.Wow64RevertWow64FsRedirection
@@ -55,56 +60,199 @@ class enable_file_system_redirection:
         if self.success:
             self._revert(self.old_value)
 
+
+#GLOBAL CONSTANTS
+TMP_DIR = os.getenv('TMP', 'NONE')
+SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
+SYS_ROOT = os.getenv('SystemRoot', 'NONE')
+USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
+DSS_DIR = os.getenv('DSS_HOME', 'NONE')
+JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
+PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
+AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE') #activemqhome
+JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
+HOST_NAME = socket.gethostname() #HOSTNAME
+FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
+DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
+CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
+KEYS = '%s\\keys\\' % DSS_DIR
+JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
+
+collect_me = '''
+{
+  "EIP": [
+    {"source": "/EIPSettings.xml", "destination": "/EIP/"},
+    {"source": "/apache/logs/", "destination": "/EIP/apache/"},
+    {"source": "/tomcat/logs/", "destination": "/EIP/tomcat/"},
+    {"source": "/logs/", "destination": "/EIP/logs/"}
+  ],
+  "DSS": [
+    {"source": "/apache/logs/", "destination": "/DSS/apache/logs/"},
+    {"source": "/apache/conf/httpd.conf", "destination": "/DSS/apache/"},
+    {"source": "/apache/conf/extra/httpd-ssl.conf", "destination": "/DSS/apache/"},
+    {"source": "/conf/", "destination": "/DSS/conf/"},
+    {"source": "/ConfigurationStore/", "destination": "/DSS/ConfigurationStore/"},
+    {"source": "/Data-Batch-Server/logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/service-container/container/logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server//service-container/container/etc/jetty.xml", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/service-container/container/logs/service_logs/", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/Data-Batch-Server/service-container/container/webapps/data-batch-services.xml", "destination": "/DSS/Data-Batch-Server/"},
+    {"source": "/DiscoveryJobs/", "destination": "/DSS/DiscoveryJobs/"},
+    {"source": "/EPS_CAMEL/data/service_logs/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/keystore/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/logs/", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/application.properties", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/camel.log", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/EPS_CAMEL/service-config/log4j2.xml", "destination": "/DSS/EPS_CAMEL/"},
+    {"source": "/ResourceResolver/ResourceResolverServerMaster.db", "destination": "/DSS/ResourceResolver/"},
+    {"source": "/ResourceResolver/RRUserDefinedResourceMasterRiskLevel.xml", "destination": "/DSS/ResourceResolver/"},
+    {"source": "/ResourceResolver/RRUserDefinedResourceMaster.xml", "destination": "/DSS/ResourceResolver/"},
+    {"source": "/tomcat/logs/", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/conf/catalina.properties", "destination": "/DSS/tomcat/"},
+    {"source": "/tomcat/conf/Catalina/localhost/dlp.xml", "destination": "/DSS/tomcat/"},
+    {"source": "/keys/", "destination": "/DSS/keys/"},
+    {"source": "/Logs/", "destination": "/DSS/Logs"},
+    {"source": "/mediator/logs/mediator.out", "destination": "/DSS/mediator/"},
+    {"source": "/MessageBroker/data/activemq.log", "destination": "/DSS/MessageBroker/"},
+    {"source": "/MessageBroker/data/audit.log", "destination": "/DSS/MessageBroker/"},
+    {"source": "/MessageBroker/data/service_logs/", "destination": "/DSS/MessageBroker/"},
+    {"source": "/allcerts.cer", "destination": "/DSS/"},
+    {"source": "/ca.cer", "destination": "/DSS/"},
+    {"source": "/DistList.csv", "destination": "/DSS/"},
+    {"source": "/host.cer", "destination": "/DSS/"},
+    {"source": "/host.key", "destination": "/DSS/"},
+    {"source": "/HostCert.key", "destination": "/DSS/"},
+    {"source": "/FileEncryptor.log", "destination": "/DSS/"},
+    {"source": "/canonizer.config.xml", "destination": "/DSS/"},
+    {"source": "/EndPointServer.config.xml", "destination": "/DSS/"},
+    {"source": "/extractor.config.xml", "destination": "/DSS/"},
+    {"source": "/extractorlinux.config.xml", "destination": "/DSS/"},
+    {"source": "/FingerprintRepositoryStatistics.xml", "destination": "/DSS/"},
+    {"source": "/FPR.config.xml", "destination": "/DSS/"},
+    {"source": "/mgmtd.config.xml", "destination": "/DSS/"},
+    {"source": "/mng-repo.xml", "destination": "/DSS/"},
+    {"source": "/OCRServer.config.xml", "destination": "/DSS/"},
+    {"source": "/OCRServer.dynamic.config.xml", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.config.xml", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.policy.xml", "destination": "/DSS/"},
+    {"source": "/PolicyEngine.policy.xml.bak", "destination": "/DSS/"},
+    {"source": "/PolicyEngineStatistics.xml", "destination": "/DSS/"},
+    {"source": "/ServerCapabilities.xml", "destination": "/DSS/"},
+    {"source": "/packages/Services/WorkSchedulerConfig.xml", "destination": "/DSS/"}
+  ],
+  "WINDOWS": [
+    {"source": "C:/Windows/System32/winevt/Logs/Application.evtx", "destination": "/Windows/"},
+    {"source": "C:/Windows/System32/winevt/Logs/System.evtx", "destination": "/Windows/"}
+  ],
+  "COMMANDS": [
+    {"command": "systeminfo", "output": "/Windows/systeminfo.txt"},
+    {"command": "gpresult /R /Z", "output": "/Windows/gpresult.txt"},
+    {"command": "netstat -abno", "output": "/Windows/netstat.txt"},
+    {"command": "sc qc DSSMANAGER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EIPMANAGER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc MSSQLSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc PAFPREP 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc POLICYENGINE 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc DSSBATCHSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc DSSMESSAGEBROKER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EPSERVER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc WORKSCHEDULER 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc MGMTD 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc PGSQLEIP 5000", "output": "/Windows/services.txt"},
+    {"command": "sc qc EIPMANAGERPROXY 5000", "output": "/Windows/services.txt"},
+    {"command": "wmic os get DataExecutionPrevention_SupportPolicy", "output": "/Windows/DEP.txt"},
+    {"command": "wmic computersystem get TotalPhysicalMemory /Value", "output": "/Windows/memory.txt"},
+    {"command": "wmic cpu get Name, NumberOfCores, NumberOfLogicalProcessors", "output": "/Windows/cpu.txt"},
+    {"command": "wmic logicaldisk Get Name, Size, Freespace", "output": "/Windows/hdd.txt"}
+  ]
+}
+'''
+
+# Create SVOS directory in temp, delete old if exists
+if os.path.exists(SVOS_DIR):
+    shutil.rmtree(SVOS_DIR)
+    os.mkdir(SVOS_DIR)
+else:
+    os.mkdir(SVOS_DIR)
+
+# Setup logger
+logging.basicConfig(filename= SVOS_DIR + 'forcepoint_support_assist.log',
+                    level=logging.DEBUG, 
+                    format='%(asctime)s [%(name)s] %(levelname)s - %(message)s',)
+# Define a Handler which writes INFO messages or higher to the sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+# Set a format which is simpler for the console
+formatter = logging.Formatter('%(message)s')
+# Tell the handler to use this format
+console.setFormatter(formatter)
+# Add the handler to the root logger
+logging.getLogger('').addHandler(console)
+
+def main():
+    logging.info(r'  ____ ___  ___  ___ ___ ___  ___ ___ _  _ _____ ')
+    logging.info(r' |  __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
+    logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
+    logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
+    logging.info('                                                ')
+    logging.info('       Forcepoint Support Assist v0.7.0         ')
+    logging.info('                                                ')
+    print('\n')
+
+    logging.info('Products detected: ')
+    if DSS_DIR == 'NONE':
+        logging.error('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
+        sys.exit()
+    else:
+        logging.info(' * Forcepoint DLP: ' + str(get_dss_version()))
+
+    EIP_DIR = get_eip_path()
+    if not EIP_DIR or EIP_DIR == 'NONE':
+        logging.debug('EIP Infra registry key does not exist.')
+    else:
+        logging.info(' * Forcepoint Security Manager: ' + str(get_eip_version()))
+        EIP_XML = EIP_DIR + "/EIPSettings.xml"
+
+    print('\n')
+    logging.info('Starting log collection ...')
+    start_data_collection()
+
+    print('\n')
+    logging.info('Running SQL queries...')
+    if EIP_DIR:
+        connect_sql_database(EIP_XML)
+    else:
+        logging.info("System is not a Forcepoint Security Manager.  Skipping SQL queries.")
+
+    check_dlp_debugging()
+    #decrypt_cluster_keys()
+
+    print('\n')
+    logging.info('Creating ZIP file ...')
+    zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
+    shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
+    fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
+    print('\n')
+    logging.info('ZIP file details: ')
+    logging.info(' * Path: ' + FPARCHIVE)
+    logging.info(' * Size: ' + fp_archive_size)
+    print('\n')
+    logging.info('Please send this file to Forcepoint Technical Support.')
+
+    enable_file_system_redirection().__enter__()
+
 def get_eip_path():
     try:
-        py_version = platform.python_version()
-        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-        logging.debug('Running Python version ' + str(py_version))
-        if major == 3:
-            import winreg
-            try:
-                hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-                result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
-                return result[0]
-            except WindowsError:
-                logging.debug('EIP Infra registry key does not exist.')
-                return False
-            except:
-                logging.debug('Not a Forcepoint Security Manager Server')
-                return False
-            try:
-                hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-            except WindowsError:
-                logging.debug('EIP Infra registry key does not exist.')
-                return False
-            except:
-                logging.debug('Not a Forcepoint Security Management Server')
-                return False
-        elif major == 2:
-            import _winreg
-            try:
-                hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-                result = _winreg.QueryValueEx(hKey, 'INSTALLDIR')
-                return result[0]
-            except WindowsError:
-                logging.debug('EIP Infra registry key does not exist.')
-                return False
-            except:
-                logging.debug('Not a Forcepoint Security Management Server')
-                return False
-            try:
-                hKey = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
-            except WindowsError:
-                logging.debug('EIP Infra registry key does not exist.')
-                return False
-            except:
-                logging.debug('Not a Forcepoint Security Management Server')
-                return False
-    except NotImplementedError:
-        logging.exception('Unknown version of Python')
+        hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+        result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
+        return result[0]
+    except WindowsError:
+        return False
+    except:
+        logging.debug('Not a Forcepoint Security Manager Server')
         return False
 
-def get_eip_version():
+def get_eip_version(EIP_DIR=get_eip_path(),EIP_XML=get_eip_path() + "/EIPSettings.xml"):
 	try:
 		if EIP_DIR and os.path.exists(EIP_XML):
 			try:
@@ -120,62 +268,27 @@ def get_eip_version():
 
 def get_dss_version():
     try:
-        py_version = platform.python_version()
-        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-    except NotImplementedError:
-        logging.exception('Unknown version of Python')
-    try:
-        if major == 3:
-            import winreg
-            try:
-                areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-                akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
-                result = winreg.QueryValueEx(akey, 'DisplayVersion')
-                return result[0]
-            except NotImplementedError:
-                logging.exception('Not a Forcepoint DLP Server')
-        elif major == 2:
-            import _winreg
-            try:
-                areg = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
-                akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
-                result = _winreg.QueryValueEx(akey, 'DisplayVersion')
-                return result[0]
-            except NotImplementedError:
-                logging.exception('Not a Forcepoint DLP Server')
+        areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+        akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
+        result = winreg.QueryValueEx(akey, 'DisplayVersion')
+        return result[0]
     except NotImplementedError:
         logging.exception('Not a Forcepoint DLP Server')
 
 def fingerprint_repository_location():
     try:
-        py_version = platform.python_version()
-        major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-        if major == 3:
-            import winreg
-            try:
-                areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-                akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
-                result = winreg.QueryValueEx(akey, 'RepositoryDir')
-                return result[0]
-            except NotImplementedError:
-                logging.exception('Not a Forcepoint DLP Server')
-        elif major == 2:
-            import _winreg
-            try:
-                areg = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
-                akey = _winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
-                result = _winreg.QueryValueEx(akey, 'RepositoryDir')
-                return result[0]
-            except NotImplementedError:
-                logging.exception('Not a Forcepoint DLP Server')
+        areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+        akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
+        result = winreg.QueryValueEx(akey, 'RepositoryDir')
+        return result[0]
     except NotImplementedError:
-        logging.exception('Unknown version of Python')
+        logging.exception('Not a Forcepoint DLP Server')
 
-def get_sql_settings():
+def get_sql_settings(file):
     try:
-        if os.path.exists(EIP_XML):
+        if os.path.exists(file):
             try:
-                tree = ET.parse(EIP_XML)
+                tree = ET.parse(file)
                 content = tree.getroot()
                 for LogDB in content.findall('LogDB'):
                     SQLSERVER = str(LogDB.find('Host').text)
@@ -232,6 +345,48 @@ def run_sql_scripts(db_cursor):
         logging.info('Completed SQL scripts.')
     except IOError:
         logging.exception('Unable to run SQL scripts.')
+
+def connect_sql_database(file):
+    db_host = get_sql_settings(file)
+    if db_host:
+        try:
+            print('\n')
+            logging.info('===== SQL Database =====')
+            logging.info('SQL Server Host: ' + db_host[0])
+            logging.info('SQL Server Port: ' + db_host[1])
+            logging.info('Current Windows user: "' + win32api.GetUserName() + '"')
+            logging.info('Connecting to database using Windows Authentication')
+            conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (db_host[0]))
+            cursor = conn.cursor()
+            windows_auth = True
+            logging.info('Successfully connected to database.')
+            run_sql_scripts(cursor)
+        except pyodbc.Error:
+            windows_auth = False
+            logging.exception(pyodbc.Error)
+        except:
+            windows_auth = False
+            logging.exception('Could not establish connection to database via Windows Authentication for current user "' + win32api.GetUserName() + '"')
+    elif db_host:
+        if windows_auth == False:
+            try:
+                logging.info('Trying SQL Authentication. Please enter valid SQL database credentials.')
+                try:
+                    input = raw_input  #If running Python 2, then bind raw_input() to Python 3's input() namespace. Allows input() to work for both Python 2 and Python 3 environments.
+                except NameError:
+                    pass  #If running Python 3, then pass on NameError exception
+                user = input('Username: ')
+                passwd = getpass.getpass('Password: ')
+                conn = pyodbc.connect(r'DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
+                cursor = conn.cursor()
+                print('\n')
+                logging.info('Successfully connected to database.')
+                run_sql_scripts(cursor)
+                conn.close()
+            except pyodbc.Error:
+                logging.exception(pyodbc.Error)
+            except IOError:
+                logging.exception('Could not establish connection to database via SQL Authentication for user "' + user + '"')
 
 def msinfo32(output):
     try:
@@ -290,7 +445,7 @@ def load_json_config():
     else:
         return json.loads(collect_me)
          
-def parse_json_config():
+def start_data_collection(EIP_DIR=get_eip_path()):
     data_set = load_json_config()
     for category in data_set:
         if category == "EIP":
@@ -403,227 +558,7 @@ def human_size(input_bytes, units=[' bytes','KB','MB','GB','TB', 'PB', 'EB']):
     """
     return str(input_bytes) + units[0] if input_bytes < 1024 else human_size(input_bytes>>10, units[1:])
 
-#GLOBAL CONSTANTS
-TMP_DIR = os.getenv('TMP', 'NONE')
-SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
-SYS_ROOT = os.getenv('SystemRoot', 'NONE')
-USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
-
-collect_me = '''
-{
-  "EIP": [
-    {"source": "/EIPSettings.xml", "destination": "/EIP/"},
-    {"source": "/apache/logs/", "destination": "/EIP/apache/"},
-    {"source": "/tomcat/logs/", "destination": "/EIP/tomcat/"},
-    {"source": "/logs/", "destination": "/EIP/logs/"}
-  ],
-  "DSS": [
-    {"source": "/apache/logs/", "destination": "/DSS/apache/"},
-    {"source": "/apache/conf/httpd.conf", "destination": "/DSS/apache/"},
-    {"source": "/apache/conf/extra/httpd-ssl.conf", "destination": "/DSS/apache/"},
-    {"source": "/conf/", "destination": "/DSS/conf/"},
-    {"source": "/ConfigurationStore/", "destination": "/DSS/ConfigurationStore/"},
-    {"source": "/Data-Batch-Server/logs/", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "/Data-Batch-Server/service-container/container/logs/", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "/Data-Batch-Server//service-container/container/etc/jetty.xml", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "/Data-Batch-Server/service-container/container/logs/service_logs/", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "/Data-Batch-Server/service-container/container/webapps/data-batch-services.xml", "destination": "/DSS/Data-Batch-Server/"},
-    {"source": "/EPS_CAMEL/data/service_logs/", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/EPS_CAMEL/keystore/", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/EPS_CAMEL/service-config/logs/", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/EPS_CAMEL/service-config/application.properties", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/EPS_CAMEL/service-config/camel.log", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/EPS_CAMEL/service-config/log4j2.xml", "destination": "/DSS/EPS_CAMEL/"},
-    {"source": "/ResourceResolver/ResourceResolverServerMaster.db", "destination": "/DSS/ResourceResolver/"},
-    {"source": "/tomcat/logs/", "destination": "/DSS/tomcat/"},
-    {"source": "/tomcat/conf/catalina.properties", "destination": "/DSS/tomcat/"},
-    {"source": "/tomcat/conf/Catalina/localhost/dlp.xml", "destination": "/DSS/tomcat/"},
-    {"source": "/keys/", "destination": "/DSS/keys/"},
-    {"source": "/Logs/", "destination": "/DSS/Logs"},
-    {"source": "/mediator/logs/mediator.out", "destination": "/DSS/mediator/"},
-    {"source": "/MessageBroker/data/activemq.log", "destination": "/DSS/MessageBroker/"},
-    {"source": "/MessageBroker/data/audit.log", "destination": "/DSS/MessageBroker/"},
-    {"source": "/MessageBroker/data/service_logs/", "destination": "/DSS/MessageBroker/"},
-    {"source": "/allcerts.cer", "destination": "/DSS/"},
-    {"source": "/ca.cer", "destination": "/DSS/"},
-    {"source": "/host.cer", "destination": "/DSS/"},
-    {"source": "/host.key", "destination": "/DSS/"},
-    {"source": "/HostCert.key", "destination": "/DSS/"},
-    {"source": "/FileEncryptor.log", "destination": "/DSS/"},
-    {"source": "/canonizer.config.xml", "destination": "/DSS/"},
-    {"source": "/EndPointServer.config.xml", "destination": "/DSS/"},
-    {"source": "/extractor.config.xml", "destination": "/DSS/"},
-    {"source": "/extractorlinux.config.xml", "destination": "/DSS/"},
-    {"source": "/FingerprintRepositoryStatistics.xml", "destination": "/DSS/"},
-    {"source": "/FPR.config.xml", "destination": "/DSS/"},
-    {"source": "/mgmtd.config.xml", "destination": "/DSS/"},
-    {"source": "/mng-repo.xml", "destination": "/DSS/"},
-    {"source": "/OCRServer.config.xml", "destination": "/DSS/"},
-    {"source": "/PolicyEngine.config.xml", "destination": "/DSS/"},
-    {"source": "/PolicyEngine.policy.xml", "destination": "/DSS/"},
-    {"source": "/PolicyEngine.policy.xml.bak", "destination": "/DSS/"},
-    {"source": "/PolicyEngineStatistics.xml", "destination": "/DSS/"},
-    {"source": "/ServerCapabilities.xml", "destination": "/DSS/"}
-  ],
-  "WINDOWS": [
-    {"source": "C:/Windows/System32/winevt/Logs/Application.evtx", "destination": "/Windows/"},
-    {"source": "C:/Windows/System32/winevt/Logs/System.evtx", "destination": "/Windows/"}
-  ],
-  "COMMANDS": [
-    {"command": "systeminfo", "output": "/Windows/systeminfo.txt"},
-    {"command": "gpresult /R /Z", "output": "/Windows/gpresult.txt"},
-    {"command": "netstat -abno", "output": "/Windows/netstat.txt"},
-    {"command": "sc qc DSSMANAGER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc EIPMANAGER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc MSSQLSERVER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc PAFPREP 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc POLICYENGINE 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc DSSBATCHSERVER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc DSSMESSAGEBROKER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc EPSERVER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc WORKSCHEDULER 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc MGMTD 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc PGSQLEIP 5000", "output": "/Windows/services.txt"},
-    {"command": "sc qc EIPMANAGERPROXY 5000", "output": "/Windows/services.txt"},
-    {"command": "wmic os get DataExecutionPrevention_SupportPolicy", "output": "/Windows/DEP.txt"},
-    {"command": "wmic computersystem get TotalPhysicalMemory /Value", "output": "/Windows/memory.txt"},
-    {"command": "wmic cpu get Name, NumberOfCores, NumberOfLogicalProcessors", "output": "/Windows/cpu.txt"},
-    {"command": "wmic logicaldisk Get Name, Size, Freespace", "output": "/Windows/hdd.txt"}
-  ]
-}
-'''
-
-# Create SVOS directory in temp, delete old if exists
-if os.path.exists(SVOS_DIR):
-    shutil.rmtree(SVOS_DIR)
-    os.mkdir(SVOS_DIR)
-else:
-    os.mkdir(SVOS_DIR)
-
-logging.basicConfig(filename= SVOS_DIR + 'forcepoint_support_assist.log',
-                    level=logging.DEBUG, 
-                    format='%(asctime)s [%(name)s] %(levelname)s - %(message)s',)
-
-# Define a Handler which writes INFO messages or higher to the sys.stderr
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-# Set a format which is simpler for the console
-formatter = logging.Formatter('%(message)s')
-# Tell the handler to use this format
-console.setFormatter(formatter)
-# Add the handler to the root logger
-logging.getLogger('').addHandler(console)
-
-logging.info(r'  ___ ___  ___  ___ ___ ___  ___ ___ _  _ _____ ')
-logging.info(r' | __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
-logging.info(r' | _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
-logging.info(r' |_| \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
-logging.info('                                                ')
-logging.info('       Forcepoint Support Assist v0.6.1')
-print('\n')
-
-# GLOBAL CONSTANTS Continued...
-EIP_DIR = get_eip_path()
-if EIP_DIR:
-    print('EIP_DIR found: %s' % EIP_DIR)
-    EIP_XML = EIP_DIR + "/EIPSettings.xml"
-DSS_DIR = os.getenv('DSS_HOME', 'NONE')
-JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
-PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
-AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE') #activemqhome
-JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
-HOST_NAME = socket.gethostname() #HOSTNAME
-FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
-DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
-CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
-KEYS = '%s\\keys\\' % DSS_DIR
-JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
-
-logging.info('Products detected: ')
-if DSS_DIR == 'NONE':
-    servicemanager.LogInfoMsg('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
-    logging.error('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
-    sys.exit()
-else:
-    logging.info(' * Forcepoint DLP version: ' + str(get_dss_version()))
-
-if EIP_DIR == 'NONE':
-    logging.error('This system is not a Forcepoint Security Manager.')
-else:
-    logging.info(' * Forcepoint Security Manager: ' + str(get_eip_version()))
-
-print('\n')
-logging.info('Starting log collection ...')
-parse_json_config()
-
-if EIP_DIR:
-    db_host = get_sql_settings()
-    if db_host:
-        try:
-            print('\n')
-            logging.info('===== SQL Database =====')
-            logging.info('SQL Server Host: ' + db_host[0])
-            logging.info('SQL Server Port: ' + db_host[1])
-            logging.info('Current Windows user: "' + win32api.GetUserName() + '"')
-            logging.info('Connecting to database using Windows Authentication')
-            conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (db_host[0]))
-            cursor = conn.cursor()
-            windows_auth = True
-            logging.info('Successfully connected to database.')
-            run_sql_scripts(cursor)
-        except pyodbc.Error:
-            windows_auth = False
-            logging.exception(pyodbc.Error)
-        except:
-            windows_auth = False
-            logging.exception('Could not establish connection to database via Windows Authentication for current user "' + win32api.GetUserName() + '"')
-    elif EIP_DIR:
-        if windows_auth == False:
-            try:
-                logging.info('Trying SQL Authentication. Please enter valid SQL database credentials.')
-                try:
-                    py_version = platform.python_version()
-                    major, minor, patch = [int(x, 10) for x in py_version.split('.')]
-                    if major == 3:
-                        #python 3.x implementation
-                        user = input('Username: ')
-                    elif major == 2:
-                        #python 2.x implementation
-                        user = raw_input('Username: ')
-                except NotImplementedError:
-                    logging.exception('Unknown version of Python')
-                passwd = getpass.getpass('Password: ')
-                conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
-                cursor = conn.cursor()
-                print('\n')
-                logging.info('Successfully connected to database.')
-                run_sql_scripts(cursor)
-                conn.close()
-            except pyodbc.Error:
-                logging.exception(pyodbc.Error)
-            except IOError:
-                logging.exception('Could not establish connection to database via SQL Authentication for user "' + user + '"')
-
-check_dlp_debugging()
-
-#decrypt_cluster_keys()
-
-def main():
-    print('\n')
-    logging.info('Creating ZIP file ...')
-    zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
 
 if __name__ == '__main__':
         main()
 
-shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
-fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
-
-print('\n')
-logging.info('ZIP file details: ')
-logging.info(' * Path: ' + FPARCHIVE)
-logging.info(' * Size: ' + fp_archive_size)
-print('\n')
-logging.info('Please send this file to Forcepoint Technical Support.')
-
-enable_file_system_redirection().__enter__()
