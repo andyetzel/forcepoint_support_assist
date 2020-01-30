@@ -200,7 +200,7 @@ def main():
     logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
     logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
     logging.info('                                                  ')
-    logging.info('         Forcepoint Support Assist v0.7.0         ')
+    logging.info('         Forcepoint Support Assist v0.7.1         ')
     logging.info('                                                  ')
     print('\n')
 
