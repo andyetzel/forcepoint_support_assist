@@ -24,16 +24,19 @@ import getpass
 import win32api
 from distutils.dir_util import copy_tree
 
+# Provides compatability between Python 2 and 3
 try:
     import json
 except ImportError:
     import simplejson as json 
 
+# Provides compatability between Python 2 and 3
 try:
     import winreg
 except ImportError:
     import _winreg as winreg
 
+# Required if using 32-bit Python on a 64-bit Windows system.
 class disable_file_system_redirection:
     _disable = ctypes.windll.kernel32.Wow64DisableWow64FsRedirection
     _revert = ctypes.windll.kernel32.Wow64RevertWow64FsRedirection
@@ -48,6 +51,7 @@ class disable_file_system_redirection:
 
 disable_file_system_redirection().__enter__()
 
+# Required if using 32-bit Python on a 64-bit Windows system.
 class enable_file_system_redirection:
     _enable = ctypes.windll.kernel32.Wow64EnableWow64FsRedirection
     _revert = ctypes.windll.kernel32.Wow64RevertWow64FsRedirection
@@ -61,7 +65,7 @@ class enable_file_system_redirection:
             self._revert(self.old_value)
 
 
-#GLOBAL CONSTANTS
+# GLOBAL CONSTANTS
 TMP_DIR = os.getenv('TMP', 'NONE')
 SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
@@ -78,6 +82,7 @@ CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
 KEYS = '%s\\keys\\' % DSS_DIR
 JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
 
+# Pre-defined data set to be collected
 collect_me = '''
 {
   "EIP": [
@@ -168,7 +173,7 @@ collect_me = '''
 }
 '''
 
-# Create SVOS directory in temp, delete old if exists
+# Create new SVOS directory in Windows local temp, delete old if exists
 if os.path.exists(SVOS_DIR):
     shutil.rmtree(SVOS_DIR)
     os.mkdir(SVOS_DIR)
@@ -194,9 +199,9 @@ def main():
     logging.info(r' |  __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
     logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
     logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
-    logging.info('                                                ')
-    logging.info('       Forcepoint Support Assist v0.7.0         ')
-    logging.info('                                                ')
+    logging.info('                                                  ')
+    logging.info('         Forcepoint Support Assist v0.7.0         ')
+    logging.info('                                                  ')
     print('\n')
 
     logging.info('Products detected: ')
@@ -210,8 +215,8 @@ def main():
     if not EIP_DIR or EIP_DIR == 'NONE':
         logging.debug('EIP Infra registry key does not exist.')
     else:
-        logging.info(' * Forcepoint Security Manager: ' + str(get_eip_version()))
         EIP_XML = EIP_DIR + "/EIPSettings.xml"
+        logging.info(' * Forcepoint Security Manager: ' + str(get_eip_version(EIP_XML)))
 
     print('\n')
     logging.info('Starting log collection ...')
@@ -252,9 +257,9 @@ def get_eip_path():
         logging.debug('Not a Forcepoint Security Manager Server')
         return False
 
-def get_eip_version(EIP_DIR=get_eip_path(),EIP_XML=get_eip_path() + "/EIPSettings.xml"):
+def get_eip_version(EIP_XML):
 	try:
-		if EIP_DIR and os.path.exists(EIP_XML):
+		if os.path.exists(EIP_XML):
 			try:
 				tree = ET.parse(EIP_XML)
 				content = tree.getroot()
