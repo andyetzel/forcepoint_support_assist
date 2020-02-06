@@ -87,8 +87,12 @@ collect_me = '''
 {
   "EIP": [
     {"source": "/EIPSettings.xml", "destination": "/EIP/"},
+    {"source": "/EIPBackup.xml", "destination": "/EIP/"},
+    {"source": "/ca.cer", "destination": "/EIP/"},
     {"source": "/apache/logs/", "destination": "/EIP/apache/"},
+    {"source": "/apache/conf/", "destination": "/EIP/apache/"},
     {"source": "/tomcat/logs/", "destination": "/EIP/tomcat/"},
+    {"source": "/tomcat/conf/", "destination": "/EIP/tomcat/"},
     {"source": "/logs/", "destination": "/EIP/logs/"}
   ],
   "DSS": [
@@ -200,7 +204,7 @@ def main():
     logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
     logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
     logging.info('                                                  ')
-    logging.info('         Forcepoint Support Assist v0.7.1         ')
+    logging.info('         Forcepoint Support Assist v0.7.2         ')
     logging.info('                                                  ')
     print('\n')
 
