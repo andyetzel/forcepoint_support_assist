@@ -70,6 +70,9 @@ Releases
 * 0.7.1
     - Fixed bug introduced with 0.7.0
 
+* 0.7.2
+    - Added EIP data to default collection set
+
 Credits
 -------
 
