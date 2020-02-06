@@ -67,6 +67,9 @@ Releases
 * v0.7.0
     - Refactored code for readability and maintainability
 
+* 0.7.1
+    - Fixed bug introduced with 0.7.0
+
 Credits
 -------
 
