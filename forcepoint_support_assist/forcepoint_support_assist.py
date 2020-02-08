@@ -80,7 +80,7 @@ def onerror(func, path, exc_info):
 
 # GLOBAL CONSTANTS
 TMP_DIR = os.getenv('TMP', 'NONE')
-SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
+FPASSIST_DIR = '%s\\FPASSIST\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
 USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
 DSS_DIR = os.getenv('DSS_HOME', 'NONE')
@@ -91,12 +91,13 @@ JRE_DIR = os.getenv('JRE_HOME', 'NONE')  # javahome
 HOST_NAME = socket.gethostname()  # HOSTNAME
 FP_ARCH_PTH = USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + HOST_NAME
 FPARCHIVE = datetime.now().strftime(FP_ARCH_PTH + '_%Y%m%d-%H%M%S.zip')
-DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
+DEBUG_LOG = os.path.join(FPASSIST_DIR, 'FPassist.log')
 CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
 KEYS = '%s\\keys\\' % DSS_DIR
 JETTYXML = '%s\\service-container\\container\\etc\\jetty.xml' % JETTY_DIR
 
-# Pre-defined data set to be collected
+# The pre-defined data set to be collected
+# Override with a custom.json file located in the same path
 collect_me = '''
 {
   "EIP": [
@@ -191,25 +192,21 @@ collect_me = '''
 }
 '''
 
-# Create new SVOS directory in Windows local temp, delete old if exists
-if os.path.exists(SVOS_DIR):
-    shutil.rmtree(SVOS_DIR, ignore_errors=False, onerror=onerror)
-    os.mkdir(SVOS_DIR)
+# Create new FPASSIST directory in Windows local temp, delete old if exists
+if os.path.exists(FPASSIST_DIR):
+    shutil.rmtree(FPASSIST_DIR, ignore_errors=False, onerror=onerror)
+    os.mkdir(FPASSIST_DIR)
 else:
-    os.mkdir(SVOS_DIR)
+    os.mkdir(FPASSIST_DIR)
 
 # Setup logger
-logging.basicConfig(filename=SVOS_DIR + 'fpassist.log',
+logging.basicConfig(filename=FPASSIST_DIR + 'FPassist.log',
                     level=logging.DEBUG,
                     format='%(asctime)s [%(name)s] %(levelname)s - %(message)s',)
-# Define a Handler which writes INFO messages or higher to the sys.stderr
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
-# Set a format which is simpler for the console
 formatter = logging.Formatter('%(message)s')
-# Tell the handler to use this format
 console.setFormatter(formatter)
-# Add the handler to the root logger
 logging.getLogger('').addHandler(console)
 
 
@@ -226,7 +223,8 @@ def main():
 
     logging.info('Products detected: ')
     if DSS_DIR == 'NONE':
-        logging.error('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
+        logging.error('This system is not a Forcepoint DLP server!')
+        logging.error('The Forcepoint Support Assist script will exit now.')
         sys.exit()
     else:
         logging.info(' * Forcepoint DLP: %s' % str(get_dss_version()))
@@ -245,15 +243,16 @@ def main():
     print('\n')
     if EIP_DIR:
         connect_sql_database(EIP_XML)
-        decrypt_cluster_keys()
     else:
         logging.info("System is not a Forcepoint Security Manager.  Skipping SQL queries.")
+
+    decrypt_cluster_keys()
 
     check_dlp_debugging()
 
     print('\n')
     logging.info('Creating ZIP file ...')
-    zipper('%s\\SVOS' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
+    zipper('%s\\FPASSIST' % TMP_DIR, '%s\\FP.zip' % TMP_DIR)
     shutil.move('%s\\FP.zip' % TMP_DIR, FPARCHIVE)
     fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
     print('\n')
@@ -268,7 +267,10 @@ def main():
 
 def get_eip_path():
     try:
-        hKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 'Software\\Wow6432Node\\Websense\\EIP Infra')
+        hKey = winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            'Software\\Wow6432Node\\Websense\\EIP Infra'
+        )
         result = winreg.QueryValueEx(hKey, 'INSTALLDIR')
         return result[0]
     except WindowsError:
@@ -296,7 +298,10 @@ def get_eip_version(EIP_XML):
 def get_dss_version():
     try:
         areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-        akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security')
+        akey = winreg.OpenKey(
+            areg,
+            'SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Data Security'
+            )
         result = winreg.QueryValueEx(akey, 'DisplayVersion')
         return result[0]
     except NotImplementedError:
@@ -306,7 +311,10 @@ def get_dss_version():
 def fingerprint_repository_location():
     try:
         areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-        akey = winreg.OpenKey(areg, 'SOFTWARE\\Wow6432Node\\Websense\\Data Security')
+        akey = winreg.OpenKey(
+            areg,
+            'SOFTWARE\\Wow6432Node\\Websense\\Data Security'
+        )
         result = winreg.QueryValueEx(akey, 'RepositoryDir')
         return result[0]
     except NotImplementedError:
@@ -360,7 +368,7 @@ def run_sql_scripts(db_cursor):
         {"CRAWLER_TASKS.csv": "SELECT (select COUNT (*) from WS_PLC_CC_FILE_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_DB_FINGERPRINTS) + (select COUNT (*) from WS_PLC_CC_MACHINE_LEARNING) + (select COUNT (*) from WS_PLC_DISCOVERY_TASKS)"},
         {"UNHOOKED_APPS.csv": "select STR_VALUE from WS_ENDPNT_GLOB_CONFIG_PROPS where NAME = 'generalExcludedApplications'"}
     ]
-    DIR = '%s\\SVOS' % TMP_DIR
+    DIR = '%s\\FPASSIST' % TMP_DIR
     logging.info('Running SQL scripts ...')
     try:
         for param in sql_script_params:
@@ -378,6 +386,7 @@ def run_sql_scripts(db_cursor):
 
 
 def connect_sql_database(file):
+    current_user = str(win32api.GetUserNameEx(win32api.NameSamCompatible))
     db_host = get_sql_settings(file)
     if db_host:
         try:
@@ -386,7 +395,7 @@ def connect_sql_database(file):
             logging.info('SQL Server Host: "%s"' % db_host[0])
             logging.info('SQL Server Port: "%s"' % db_host[1])
             logging.info('SQL Server Instance: "%s"' % db_host[2])
-            logging.info('Current Windows user: "%s"' % str(win32api.GetUserNameEx(win32api.NameSamCompatible)))
+            logging.info('Current Windows user: "%s"' % current_user)
             logging.info('Connecting to database using Windows Authentication')
             conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (db_host[0]))
             cursor = conn.cursor()
@@ -402,7 +411,7 @@ def connect_sql_database(file):
         except:
             windows_auth = False
             print('\n')
-            logging.exception('Could not establish connection to database via Windows Authentication for current user "%s"' % str(win32api.GetUserNameEx(win32api.NameSamCompatible)))
+            logging.exception('Could not establish connection to database via Windows Authentication for current user "%s"' % current_user)
             logging.debug(sys.exc_info()[1])
 
     if db_host and windows_auth is False:
@@ -418,21 +427,21 @@ def connect_sql_database(file):
                 # This is fine. Just pass and continue on.
                 logging.debug(sys.exc_info()[1])
                 pass
-            user = input('SQL Username: ')
-            passwd = getpass.getpass('SQL Password: ')
-            conn = pyodbc.connect(r'DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
+            sql_user = input('SQL Username: ')
+            sql_passwd = getpass.getpass('SQL Password: ')
+            conn = pyodbc.connect(r'DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], sql_user, sql_passwd))
             cursor = conn.cursor()
             print('\n')
-            logging.info('Successfully connected to database as user "%s"' % user)
+            logging.info('Successfully connected to database as user "%s"' % sql_user)
             run_sql_scripts(cursor)
             conn.close()
         except pyodbc.Error:
             print('\n')
-            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % user)
+            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % sql_user)
             logging.debug(sys.exc_info()[1])
         except:
             print('\n')
-            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % user)
+            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % sql_user)
             logging.debug(sys.exc_info()[1])
 
 
@@ -457,7 +466,7 @@ def check_dlp_debugging():
         with open(DSS_CONF + filename) as currentfile:
             text = currentfile.read()
             if 'DEBUG' in text or 'debug' in text:
-                with open(SVOS_DIR + 'debug_enabled.txt', 'a+') as f:
+                with open(FPASSIST_DIR + 'debug_enabled.txt', 'a+') as f:
                     f.write(filename + ' has debugging enabled\n')
 
 
@@ -478,7 +487,8 @@ def copy_data(src, dst):
             except:
                 logging.exception('Unable to copy file %s. Skipping...' % src)
     except IOError:
-        logging.exception('An unexpected error has occurred while copying from %s to %s. Please contact Forcepoint Technical Support for further assistance.' % (src, dst))
+        logging.exception('Unable to copy from %s to %s.' % (src, dst))
+        logging.exception('Please contact Forcepoint Technical Support for further assistance.')
 
 
 def log_process_output(pipe):
@@ -516,7 +526,7 @@ def start_data_collection(EIP_DIR=get_eip_path()):
                 print('\n')
                 logging.info('===== EIP logs =====')
                 for item in data_set[category]:
-                    dst_path = SVOS_DIR + item['destination']
+                    dst_path = FPASSIST_DIR + item['destination']
                     if not os.path.exists(dst_path):
                         os.makedirs(dst_path)
                     src_path = EIP_DIR + item['source']
@@ -527,7 +537,7 @@ def start_data_collection(EIP_DIR=get_eip_path()):
             print('\n')
             logging.info('===== DSS logs =====')
             for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
+                dst_path = FPASSIST_DIR + item['destination']
                 if not os.path.exists(dst_path):
                     os.makedirs(dst_path)
                 src_path = DSS_DIR + item['source']
@@ -536,7 +546,7 @@ def start_data_collection(EIP_DIR=get_eip_path()):
             print('\n')
             logging.info('===== Windows Event logs =====')
             for item in data_set[category]:
-                dst_path = SVOS_DIR + item['destination']
+                dst_path = FPASSIST_DIR + item['destination']
                 if not os.path.exists(dst_path):
                     os.makedirs(dst_path)
                 src_path = item['source']
@@ -544,9 +554,9 @@ def start_data_collection(EIP_DIR=get_eip_path()):
         if category == "COMMANDS":
             print('\n')
             logging.info('===== Windows Commands =====')
-            msinfo32(SVOS_DIR)
+            msinfo32(FPASSIST_DIR)
             for item in data_set[category]:
-                dst_path = SVOS_DIR + item['output']
+                dst_path = FPASSIST_DIR + item['output']
                 cmd = item['command']
                 run_command(cmd, dst_path)
 
@@ -616,7 +626,7 @@ def decrypt_cluster_keys():
 def zipper(dir, zip_file):
     zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
     root_len = len(os.path.abspath(dir))
-    for root, dirs, files in os.walk(dir):
+    for root, _dirs, files in os.walk(dir):
         archive_root = os.path.abspath(root)[root_len:]
         for f in files:
             fullpath = os.path.join(root, f)
