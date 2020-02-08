@@ -220,7 +220,7 @@ def main():
     logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
     logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
     logging.info('                                                  ')
-    logging.info('              Support Assist v0.7.3               ')
+    logging.info('              Support Assist v0.8.0               ')
     logging.info('                                                  ')
     print('\n')
 
