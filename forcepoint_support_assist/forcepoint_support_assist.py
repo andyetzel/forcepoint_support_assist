@@ -1,40 +1,35 @@
 from __future__ import with_statement
 import os
 import socket
-import win32evtlog
 import sys
 from datetime import datetime
 import subprocess
+from subprocess import Popen, PIPE, STDOUT
 import shutil
+import stat
 import pyodbc
-import csv
-import win32wnet
-import servicemanager
 import ctypes
 import zipfile
-import win32security
-import win32con
 import xml.etree.ElementTree as ET
 import logging
-import win32com.client
 import re
-import time
-import platform
 import getpass
 import win32api
 from distutils.dir_util import copy_tree
 
-# Provides compatability between Python 2 and 3
+# Provides compatability between Python 2 and Python 3
 try:
     import json
 except ImportError:
-    import simplejson as json 
+    import simplejson as json
 
-# Provides compatability between Python 2 and 3
+
+# Provides compatability between Python 2 and Python 3
 try:
     import winreg
 except ImportError:
     import _winreg as winreg
+
 
 # Required if using 32-bit Python on a 64-bit Windows system.
 class disable_file_system_redirection:
@@ -49,7 +44,6 @@ class disable_file_system_redirection:
         if self.success:
             self._revert(self.old_value)
 
-disable_file_system_redirection().__enter__()
 
 # Required if using 32-bit Python on a 64-bit Windows system.
 class enable_file_system_redirection:
@@ -65,18 +59,38 @@ class enable_file_system_redirection:
             self._revert(self.old_value)
 
 
+def onerror(func, path, exc_info):
+    """
+    Error handler for ``shutil.rmtree``.
+
+    If the error is due to an access error (read only file)
+    it attempts to add write permission and then retries.
+
+    If the error is for another reason it re-raises the error.
+
+    Usage : ``shutil.rmtree(path, onerror=onerror)``
+    """
+    if not os.access(path, os.W_OK):
+        # Is the error an access error ?
+        os.chmod(path, stat.S_IWUSR)
+        func(path)
+    else:
+        raise OSError
+
+
 # GLOBAL CONSTANTS
 TMP_DIR = os.getenv('TMP', 'NONE')
 SVOS_DIR = '%s\\SVOS\\' % TMP_DIR
 SYS_ROOT = os.getenv('SystemRoot', 'NONE')
 USER_PROFILE_DIR = os.getenv('USERPROFILE', 'NONE')
 DSS_DIR = os.getenv('DSS_HOME', 'NONE')
-JETTY_DIR = os.getenv('JETTY_HOME', 'NONE') #jettyhome
-PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE') #pythonpath
-AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE') #activemqhome
-JRE_DIR = os.getenv('JRE_HOME', 'NONE') #javahome
-HOST_NAME = socket.gethostname() #HOSTNAME
-FPARCHIVE = datetime.now().strftime(USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + '_' + HOST_NAME + '_%Y%m%d-%H%M%S.zip')
+JETTY_DIR = os.getenv('JETTY_HOME', 'NONE')  # jettyhome
+PYTHON_DIR = os.getenv('PYTHONPATH', 'NONE')  # pythonpath
+AMQ_DIR = os.getenv('ACTIVEMQ_HOME', 'NONE')  # activemqhome
+JRE_DIR = os.getenv('JRE_HOME', 'NONE')  # javahome
+HOST_NAME = socket.gethostname()  # HOSTNAME
+FP_ARCH_PTH = USER_PROFILE_DIR + '\\Desktop\\FPAssist_' + HOST_NAME
+FPARCHIVE = datetime.now().strftime(FP_ARCH_PTH + '_%Y%m%d-%H%M%S.zip')
 DEBUG_LOG = os.path.join(SVOS_DIR, 'forcepoint_support_assist.log')
 CATPROP = '%s\\tomcat\\conf\\catalina.properties' % DSS_DIR
 KEYS = '%s\\keys\\' % DSS_DIR
@@ -179,14 +193,14 @@ collect_me = '''
 
 # Create new SVOS directory in Windows local temp, delete old if exists
 if os.path.exists(SVOS_DIR):
-    shutil.rmtree(SVOS_DIR)
+    shutil.rmtree(SVOS_DIR, ignore_errors=False, onerror=onerror)
     os.mkdir(SVOS_DIR)
 else:
     os.mkdir(SVOS_DIR)
 
 # Setup logger
-logging.basicConfig(filename= SVOS_DIR + 'forcepoint_support_assist.log',
-                    level=logging.DEBUG, 
+logging.basicConfig(filename=SVOS_DIR + 'fpassist.log',
+                    level=logging.DEBUG,
                     format='%(asctime)s [%(name)s] %(levelname)s - %(message)s',)
 # Define a Handler which writes INFO messages or higher to the sys.stderr
 console = logging.StreamHandler()
@@ -198,13 +212,15 @@ console.setFormatter(formatter)
 # Add the handler to the root logger
 logging.getLogger('').addHandler(console)
 
+
 def main():
+    disable_file_system_redirection().__enter__()
     logging.info(r'  ____ ___  ___  ___ ___ ___  ___ ___ _  _ _____ ')
     logging.info(r' |  __/ _ \| _ \/ __| __| _ \/ _ \_ _| \| |_   _|')
     logging.info(r' |  _| (_) |   / (__| _||  _/ (_) | || .` | | |  ')
     logging.info(r' |_|  \___/|_|_|\___|___|_|  \___/___|_|\_| |_|  ')
     logging.info('                                                  ')
-    logging.info('         Forcepoint Support Assist v0.7.2         ')
+    logging.info('              Support Assist v0.8.0               ')
     logging.info('                                                  ')
     print('\n')
 
@@ -213,28 +229,27 @@ def main():
         logging.error('This system is not a Forcepoint DLP server.  The Forcepoint Support Assist script will exit now.')
         sys.exit()
     else:
-        logging.info(' * Forcepoint DLP: ' + str(get_dss_version()))
+        logging.info(' * Forcepoint DLP: %s' % str(get_dss_version()))
 
     EIP_DIR = get_eip_path()
     if not EIP_DIR or EIP_DIR == 'NONE':
         logging.debug('EIP Infra registry key does not exist.')
     else:
         EIP_XML = EIP_DIR + "/EIPSettings.xml"
-        logging.info(' * Forcepoint Security Manager: ' + str(get_eip_version(EIP_XML)))
+        logging.info(' * Forcepoint Security Manager: %s' % str(get_eip_version(EIP_XML)))
 
     print('\n')
     logging.info('Starting log collection ...')
     start_data_collection()
 
     print('\n')
-    logging.info('Running SQL queries...')
     if EIP_DIR:
         connect_sql_database(EIP_XML)
+        decrypt_cluster_keys()
     else:
         logging.info("System is not a Forcepoint Security Manager.  Skipping SQL queries.")
 
     check_dlp_debugging()
-    #decrypt_cluster_keys()
 
     print('\n')
     logging.info('Creating ZIP file ...')
@@ -243,12 +258,13 @@ def main():
     fp_archive_size = human_size(os.path.getsize(FPARCHIVE))
     print('\n')
     logging.info('ZIP file details: ')
-    logging.info(' * Path: ' + FPARCHIVE)
-    logging.info(' * Size: ' + fp_archive_size)
+    logging.info(' * Path: %s' % FPARCHIVE)
+    logging.info(' * Size: %s' % fp_archive_size)
     print('\n')
     logging.info('Please send this file to Forcepoint Technical Support.')
 
     enable_file_system_redirection().__enter__()
+
 
 def get_eip_path():
     try:
@@ -261,19 +277,21 @@ def get_eip_path():
         logging.debug('Not a Forcepoint Security Manager Server')
         return False
 
+
 def get_eip_version(EIP_XML):
-	try:
-		if os.path.exists(EIP_XML):
-			try:
-				tree = ET.parse(EIP_XML)
-				content = tree.getroot()
-				#Get EIP Version
-				eip_version = str(content.find('Infra_Version').text)
-				return eip_version
-			except:
-				logging.exception('Unable to read EIPSettings.xml')
-	except NameError:
-		logging.exception('Critical error has been encountered.')
+    try:
+        if os.path.exists(EIP_XML):
+            try:
+                tree = ET.parse(EIP_XML)
+                content = tree.getroot()
+                # Get EIP Version
+                eip_version = str(content.find('Infra_Version').text)
+                return eip_version
+            except:
+                logging.exception('Unable to read EIPSettings.xml')
+    except NameError:
+        logging.exception('Critical error has been encountered.')
+
 
 def get_dss_version():
     try:
@@ -284,6 +302,7 @@ def get_dss_version():
     except NotImplementedError:
         logging.exception('Not a Forcepoint DLP Server')
 
+
 def fingerprint_repository_location():
     try:
         areg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
@@ -292,6 +311,7 @@ def fingerprint_repository_location():
         return result[0]
     except NotImplementedError:
         logging.exception('Not a Forcepoint DLP Server')
+
 
 def get_sql_settings(file):
     try:
@@ -307,7 +327,7 @@ def get_sql_settings(file):
                     SQLSERVER = SQLSERVER
                 else:
                     SQLSERVER = SQLSERVER + '\\' + SQLINSTANCE
-                db_settings = [SQLSERVER, SQLPORT]
+                db_settings = [SQLSERVER, SQLPORT, SQLINSTANCE]
                 return db_settings
             except OSError:
                 logging.exception('Unable to read EIPSettings.xml')
@@ -318,6 +338,7 @@ def get_sql_settings(file):
     except NameError:
         logging.exception('A critical error has occurred.')
         return False
+
 
 def run_sql_scripts(db_cursor):
     sql_script_params = [
@@ -355,56 +376,80 @@ def run_sql_scripts(db_cursor):
     except IOError:
         logging.exception('Unable to run SQL scripts.')
 
+
 def connect_sql_database(file):
     db_host = get_sql_settings(file)
     if db_host:
         try:
             print('\n')
             logging.info('===== SQL Database =====')
-            logging.info('SQL Server Host: ' + db_host[0])
-            logging.info('SQL Server Port: ' + db_host[1])
-            logging.info('Current Windows user: "' + win32api.GetUserName() + '"')
+            logging.info('SQL Server Host: "%s"' % db_host[0])
+            logging.info('SQL Server Port: "%s"' % db_host[1])
+            logging.info('SQL Server Instance: "%s"' % db_host[2])
+            logging.info('Current Windows user: "%s"' % str(win32api.GetUserNameEx(win32api.NameSamCompatible)))
             logging.info('Connecting to database using Windows Authentication')
             conn = pyodbc.connect(r'DRIVER={SQL Server};Server=%s;Database=wbsn-data-security;Trusted_Connection=yes;' % (db_host[0]))
             cursor = conn.cursor()
             windows_auth = True
+            print('\n')
             logging.info('Successfully connected to database.')
             run_sql_scripts(cursor)
-        except pyodbc.Error:
-            windows_auth = False
-            logging.exception(pyodbc.Error)
+        # except pyodbc.Error:
+        #     windows_auth = False
+        #     print('\n')
+        #     logging.exception('Could not establish connection to database via Windows Authentication for current user "%s"' % str(win32api.GetUserNameEx(win32api.NameSamCompatible)))
+        #     logging.debug(sys.exc_info()[1])
         except:
             windows_auth = False
-            logging.exception('Could not establish connection to database via Windows Authentication for current user "' + win32api.GetUserName() + '"')
-    elif db_host:
-        if windows_auth == False:
+            print('\n')
+            logging.exception('Could not establish connection to database via Windows Authentication for current user "%s"' % str(win32api.GetUserNameEx(win32api.NameSamCompatible)))
+            logging.debug(sys.exc_info()[1])
+
+    if db_host and windows_auth is False:
+        try:
+            print('\n')
+            logging.info('Trying SQL Authentication. Please enter valid SQL database credentials.')
             try:
-                logging.info('Trying SQL Authentication. Please enter valid SQL database credentials.')
-                try:
-                    input = raw_input  #If running Python 2, then bind raw_input() to Python 3's input() namespace. Allows input() to work for both Python 2 and Python 3 environments.
-                except NameError:
-                    pass  #If running Python 3, then pass on NameError exception
-                user = input('Username: ')
-                passwd = getpass.getpass('Password: ')
-                conn = pyodbc.connect(r'DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
-                cursor = conn.cursor()
-                print('\n')
-                logging.info('Successfully connected to database.')
-                run_sql_scripts(cursor)
-                conn.close()
-            except pyodbc.Error:
-                logging.exception(pyodbc.Error)
-            except IOError:
-                logging.exception('Could not establish connection to database via SQL Authentication for user "' + user + '"')
+                # Bind Python 2's raw_input() to Python 3's input().
+                # This workaround allows input() to work for both Python 2 and Python 3 environments.
+                input = raw_input
+            except NameError:
+                # Python 3 will raise NameError when raw_input() is called.
+                # This is fine. Just pass and continue on.
+                logging.debug(sys.exc_info()[1])
+                pass
+            user = input('SQL Username: ')
+            passwd = getpass.getpass('SQL Password: ')
+            conn = pyodbc.connect(r'DRIVER={SQL Server Native Client 11.0};SERVER=%s;DATABASE=wbsn-data-security;UID=%s;PWD=%s;' % (db_host[0], user, passwd))
+            cursor = conn.cursor()
+            print('\n')
+            logging.info('Successfully connected to database as user "%s"' % user)
+            run_sql_scripts(cursor)
+            conn.close()
+        except pyodbc.Error:
+            print('\n')
+            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % user)
+            logging.debug(sys.exc_info()[1])
+        except:
+            print('\n')
+            logging.exception('Could not establish connection to database via SQL Authentication for user "%s"' % user)
+            logging.debug(sys.exc_info()[1])
+
 
 def msinfo32(output):
     try:
         output_file = output + "/Windows/msinfo32.nfo"
         cmd = "msinfo32 /nfo " + output_file
         logging.info('Command: ' + cmd)
-        subprocess.call(cmd)
+        process = Popen(cmd, stdout=PIPE, stderr=STDOUT)
+        with process.stdout:
+            log_process_output(process.stdout)
+        exitcode = process.wait()  # 0 means success
+        logging.debug('Exit code %s - %s' % (exitcode, cmd))
+        # subprocess.call(cmd)
     except:
-        logging.exception('Cannot run MSInfo32!')
+        logging.exception('Exit code: %s - Cannot run MSInfo32!' % exitcode)
+
 
 def check_dlp_debugging():
     DSS_CONF = DSS_DIR + '/conf/'
@@ -415,26 +460,33 @@ def check_dlp_debugging():
                 with open(SVOS_DIR + 'debug_enabled.txt', 'a+') as f:
                     f.write(filename + ' has debugging enabled\n')
 
-def copy_data(src,dst):
+
+def copy_data(src, dst):
     try:
         if os.path.isdir(src):
             try:
                 # shutil.copytree(src, dst, dirs_exist_ok=True)
                 # print('Copied directory ' + src)
                 copy_tree(src, dst, preserve_times=1)
-                logging.info('Directory: ' + src)
+                logging.info('Directory: %s' % src)
             except OSError:
                 logging.exception('Unable to copy directory. Skipping...')
         if os.path.isfile(src):
             try:
                 shutil.copy2(src, dst)
-                logging.info('File: ' + src)
+                logging.info('File: %s' % src)
             except:
-                logging.exception('Unable to copy file ' + src + '. Skipping...')
+                logging.exception('Unable to copy file %s. Skipping...' % src)
     except IOError:
-        logging.exception('An unexpected error has occurred while copying from ' + src + ' to ' + dst + '. Please contact Forcepoint Technical Support for further assistance.')
+        logging.exception('An unexpected error has occurred while copying from %s to %s. Please contact Forcepoint Technical Support for further assistance.' % (src, dst))
 
-def run_command(cmd,dst):
+
+def log_process_output(pipe):
+    for line in iter(pipe.readline, ''):  # b'\n\'-separated lines
+        logging.debug('Got line from subprocess: %r', line.rstrip())
+
+
+def run_command(cmd, dst):
     try:
         output_file = dst
         with open(output_file, 'a+') as f:
@@ -443,8 +495,9 @@ def run_command(cmd,dst):
     except:
         logging.exception('Cannot run command: ' + cmd)
 
+
 def load_json_config():
-    #Look for custom JSON settings
+    # Look for custom JSON settings
     if os.path.isfile('custom.json'):
         print('\n')
         logging.warning('Using custom JSON configuration.')
@@ -453,7 +506,8 @@ def load_json_config():
             return json.loads(f.read())
     else:
         return json.loads(collect_me)
-         
+
+
 def start_data_collection(EIP_DIR=get_eip_path()):
     data_set = load_json_config()
     for category in data_set:
@@ -466,7 +520,7 @@ def start_data_collection(EIP_DIR=get_eip_path()):
                     if not os.path.exists(dst_path):
                         os.makedirs(dst_path)
                     src_path = EIP_DIR + item['source']
-                    copy_data(src_path,dst_path)
+                    copy_data(src_path, dst_path)
             else:
                 logging.debug('Not a Forcepoint Security Manager.')
         if category == "DSS":
@@ -477,7 +531,7 @@ def start_data_collection(EIP_DIR=get_eip_path()):
                 if not os.path.exists(dst_path):
                     os.makedirs(dst_path)
                 src_path = DSS_DIR + item['source']
-                copy_data(src_path,dst_path)
+                copy_data(src_path, dst_path)
         if category == "WINDOWS":
             print('\n')
             logging.info('===== Windows Event logs =====')
@@ -486,17 +540,16 @@ def start_data_collection(EIP_DIR=get_eip_path()):
                 if not os.path.exists(dst_path):
                     os.makedirs(dst_path)
                 src_path = item['source']
-                copy_data(src_path,dst_path)
+                copy_data(src_path, dst_path)
         if category == "COMMANDS":
             print('\n')
             logging.info('===== Windows Commands =====')
             msinfo32(SVOS_DIR)
             for item in data_set[category]:
                 dst_path = SVOS_DIR + item['output']
-                # if not os.path.exists(dst_path):
-                    # os.makedirs(dst_path)
                 cmd = item['command']
-                run_command(cmd,dst_path)
+                run_command(cmd, dst_path)
+
 
 def search_in_file(phrase, file):
     searchfile = open(file, 'r')
@@ -504,7 +557,10 @@ def search_in_file(phrase, file):
         if phrase in line:
             return line
 
+
 def decrypt_cluster_keys():
+    print('\n')
+    logging.info('===== Checking Crypto Keys =====')
     if os.path.isfile(CATPROP):
         catdawg = search_in_file('wbsn', CATPROP)
         cat = catdawg.replace('wbsn.com.pa.crypto.crypto.PAISCryptorV2.key=', '')
@@ -513,20 +569,32 @@ def decrypt_cluster_keys():
         cat3 = cat2.replace('\n', ' ')
         os.chdir(DSS_DIR)
         command = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + cat3
-        logging.debug('Catalina.properties: ')
-        subprocess.call(command)
+        logging.debug('Catalina.properties: %s' % command)
+        process = Popen(command, stdout=PIPE, stderr=STDOUT)
+        with process.stdout:
+            log_process_output(process.stdout)
+        exitcode = process.wait()  # 0 means success
+        logging.debug('Exit code %s - %s' % (exitcode, command))
 
     if os.path.exists(DSS_DIR):
         cacert = search_in_file('{4;', DSS_DIR + 'ca.cer')
         command = 'cryptotool -k 4 -d -t' + ' ' + cacert
-        logging.debug('ca.cer: ')
-        subprocess.call(command)
+        logging.debug('ca.cer: %s' % command)
+        process = Popen(command, stdout=PIPE, stderr=STDOUT)
+        with process.stdout:
+            log_process_output(process.stdout)
+        exitcode = process.wait()  # 0 means success
+        logging.debug('Exit code %s - %s' % (exitcode, command))
 
     if os.path.exists(KEYS):
         os.chdir(KEYS)
         command = 'cryptotool -k 2 -g'
-        logging.debug('epcluster.key: ')
-        subprocess.call(command)
+        logging.debug('epcluster.key: %s' % command)
+        process = Popen(command, stdout=PIPE, stderr=STDOUT)
+        with process.stdout:
+            log_process_output(process.stdout)
+        exitcode = process.wait()  # 0 means success
+        logging.debug('Exit code %s - %s' % (exitcode, command))
 
     if os.path.isfile(JETTYXML):
         jettydawg = search_in_file('wsjf', JETTYXML)
@@ -537,8 +605,13 @@ def decrypt_cluster_keys():
         j5 = j4[2] + ' ' + j4[0] + ' ' + j4[1]
         os.chdir(DSS_DIR)
         command = 'jre\\bin\\java -cp jre\\lib\\ext\\fortress.jar;tomcat\\lib\\tomcat-ext.jar com.pa.tomcat.resources.DecryptPassword' + ' ' + j5
-        logging.debug('jetty.xml :')
-        subprocess.call(command)
+        logging.debug('jetty.xml: %s' % command)
+        process = Popen(command, stdout=PIPE, stderr=STDOUT)
+        with process.stdout:
+            log_process_output(process.stdout)
+        exitcode = process.wait()  # 0 means success
+        logging.debug('Exit code %s - %s' % (exitcode, command))
+
 
 def zipper(dir, zip_file):
     zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
@@ -552,21 +625,22 @@ def zipper(dir, zip_file):
     zip.close()
     return zip_file
 
-def human_size(input_bytes, units=[' bytes','KB','MB','GB','TB', 'PB', 'EB']):
+
+def human_size(input_bytes, units=['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']):
     """ Returns a human readable string reprentation of bytes.
-    
+
     Args:
         input_bytes (int): Raw bytes to be calculated.
         units (:obj:'list' of :obj:'str', optional): List of human readable byte size formats. Defaults to predefined list.
-    
+
     Returns:
         String representing human readable byte size format.
 
     Example:
         "2048 MB"
     """
-    return str(input_bytes) + units[0] if input_bytes < 1024 else human_size(input_bytes>>10, units[1:])
+    return str(input_bytes) + units[0] if input_bytes < 1024 else human_size(input_bytes >> 10, units[1:])
 
 
 if __name__ == '__main__':
-        main()
+    main()

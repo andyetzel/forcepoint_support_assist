@@ -73,6 +73,12 @@ Releases
 * 0.7.2
     - Added EIP data to default collection set
 
+* 0.8.0
+    - Added additional logging for SQL database connection parameters
+    - Added check for cluster keys
+    - Removed unused libraries
+    - Edited for PEP8 compliance
+
 Credits
 -------
 
